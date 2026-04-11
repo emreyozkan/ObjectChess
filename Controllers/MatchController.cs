@@ -13,7 +13,7 @@ namespace ObjectChess.Controllers
             _configuration = configuration;
         }
 
-        public IActionResult History()
+        public IActionResult MatchHistory()
         {
             string connectionString = _configuration.GetConnectionString("DefaultConnection");
             
