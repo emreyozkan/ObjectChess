@@ -1,0 +1,36 @@
+@model List<ObjectChess.Models.MatchHistoryViewModel>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Match History</title>
+    <link rel="stylesheet" href="~/css/MatchHistory.css" />
+</head>
+<body>
+
+    <h2>Match History</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>White Player</th>
+                <th>Black Player</th>
+                <th>Winner</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var match in Model)
+            {
+                <tr>
+                    <td>@match.WhitePlayer</td>
+                    <td>@match.BlackPlayer</td>
+                    <td><strong>@match.Winner</strong></td>
+                    <td>@match.MatchDate.ToString("dd MMM yyyy - HH:mm")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+</body>
+</html>

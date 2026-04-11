@@ -1,9 +1,10 @@
-namespace ObjectChess.Models;
-
-public class MatchHistoryViewModel
+namespace ObjectChess.Models
 {
-    public string WhitePlayerUsername { get; set; }
-    public string BlackPlayerUsername { get; set; }
-    public string WinnerUsername { get; set; }
-    public DateTime MatchDate {get; set; }
+    public class MatchHistoryViewModel
+    {
+        public string WhitePlayer { get; set; } = string.Empty;
+        public string BlackPlayer { get; set; } = string.Empty;
+        public string Winner { get; set; } = string.Empty;
+        public DateTime MatchDate { get; set; }
+    }
 }
