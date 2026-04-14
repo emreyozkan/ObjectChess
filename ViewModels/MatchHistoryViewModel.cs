@@ -1,4 +1,4 @@
-namespace ObjectChess.Models
+namespace ObjectChess.Web.ViewModels
 {
     public class MatchHistoryViewModel
     {

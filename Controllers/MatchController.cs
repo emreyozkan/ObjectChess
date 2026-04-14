@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
-using MySql.Data.MySqlClient;
-using ObjectChess.Models;
+using ObjectChess.Business.Services;
+using ObjectChess.Web.ViewModels;
+using ObjectChess.Data.Models;
 
-namespace ObjectChess.Controllers
+namespace ObjectChess.Web.Controllers
 {
     public class MatchController : Controller
     {
@@ -17,52 +18,23 @@ namespace ObjectChess.Controllers
         {
             string connectionString = _configuration.GetConnectionString("DefaultConnection");
             
-            List<MatchHistoryViewModel> matchHistoryList = new List<MatchHistoryViewModel>();
+            MatchService matchService = new MatchService(connectionString);
+            var rawMatches = matchService.GetAllMatches();
 
-            using (MySqlConnection connection = new MySqlConnection(connectionString))
+            var viewModels = new List<MatchHistoryViewModel>();
+
+            foreach (var item in rawMatches)
             {
-                connection.Open();
-
-                string query = @"
-                    SELECT 
-                        White.Username AS WhitePlayer, 
-                        Black.Username AS BlackPlayer, 
-                        Winner.Username AS Winner, 
-                        g.MatchDate 
-                    FROM Games g
-                    JOIN Players White ON g.WhitePlayerID = White.PlayerID
-                    JOIN Players Black ON g.BlackPlayerID = Black.PlayerID
-                    LEFT JOIN Players Winner ON g.WinnerID = Winner.PlayerID
-                    ORDER BY g.MatchDate DESC;";
-                
-                using (MySqlCommand command = new MySqlCommand(query, connection))
+                viewModels.Add(new MatchHistoryViewModel
                 {
-                    using (MySqlDataReader reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            MatchHistoryViewModel match = new MatchHistoryViewModel();
-
-                            match.WhitePlayer = reader["WhitePlayer"].ToString();
-                            match.BlackPlayer = reader["BlackPlayer"].ToString();
-                            match.MatchDate = Convert.ToDateTime(reader["MatchDate"]);
-
-                            if (reader["Winner"] != DBNull.Value)
-                            {
-                                match.Winner = reader["Winner"].ToString();
-                            }
-                            else
-                            {
-                                match.Winner = "Draw";
-                            }
-
-                            matchHistoryList.Add(match);
-                        }
-                    }
-                }
+                    WhitePlayer = item.WhitePlayer,
+                    BlackPlayer = item.BlackPlayer,
+                    Winner = item.Winner,
+                    MatchDate = item.MatchDate
+                });
             }
 
-            return View(matchHistoryList);
+            return View(viewModels);
         }
     }
 }

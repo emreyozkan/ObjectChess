@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using ObjectChess.Models;
+using ObjectChess.Web.ViewModels;
 
-namespace ObjectChess.Controllers;
+namespace ObjectChess.Web.Controllers;
 
 public class HomeController : Controller
 {
