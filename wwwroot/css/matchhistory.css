@@ -1,16 +1,26 @@
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-    font-family: sans-serif;
-}
+.header-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.page-title { margin: 0; font-size: 28px; font-weight: bold; color: #212529; }
 
-th, td {
-    border: 1px solid #ddd;
-    padding: 10px;
-    text-align: left;
-}
+.btn { padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+.btn-primary { background-color: #4285f4; color: white; }
+.btn-primary:hover { background-color: #3367d6; }
+.btn-success { background-color: #28a745; color: white; }
+.btn-secondary { background-color: #ccc; color: #333; }
 
-th {
-    background-color: #f2f2f2;
-}
+.form-container { background: #f8f9fa; padding: 20px; border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.hidden { display: none !important; }
+.match-form { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+.match-form input, .match-form select { padding: 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; min-width: 150px; }
+.form-actions { display: flex; gap: 10px; }
+
+.match-table { width: 100%; border-collapse: collapse; margin-top: 10px; background-color: white; }
+.match-table th, .match-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #dee2e6; }
+.match-table th { font-weight: bold; color: #495057; border-bottom: 2px solid #dee2e6; }
+.match-table tr:hover { background-color: #f8f9fa; }
+
+.delete-form { margin: 0; opacity: 0; visibility: hidden; transition: opacity 0.2s ease, visibility 0.2s ease; }
+.match-table tr:hover .delete-form { opacity: 1; visibility: visible; }
+.action-column, .action-cell { width: 80px; text-align: center; padding: 0 !important; }
+
+.btn-danger { background-color: #dc3545; color: white; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: bold;}
+.btn-danger:hover { background-color: #c82333; }

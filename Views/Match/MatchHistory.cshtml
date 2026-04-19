@@ -1,36 +1,72 @@
-@model List<ObjectChess.Web.ViewModels.MatchHistoryViewModel>
+@model ObjectChess.Web.ViewModels.MatchHistoryPageViewModel
+@using ObjectChess.Web.ViewModels
 
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Match History</title>
-    <link rel="stylesheet" href="~/css/MatchHistory.css" />
-</head>
-<body>
+@{
+    ViewData["Title"] = "Match History";
+}
 
-    <h2>Match History</h2>
+<link rel="stylesheet" href="~/css/MatchHistory.css" asp-append-version="true" />
 
-    <table>
-        <thead>
+<div class="header-container">
+    <h2 class="page-title">Match History</h2>
+    <button onclick="toggleForm()" class="btn btn-primary">
+        + Add New Match
+    </button>
+</div>
+
+<div id="addMatchForm" class="form-container hidden">
+    <form asp-action="AddMatch" method="post" class="match-form">
+        <input type="text" asp-for="NewMatch.WhitePlayer" placeholder="White Player" required />
+        <input type="text" asp-for="NewMatch.BlackPlayer" placeholder="Black Player" required />
+
+        <select asp-for="NewMatch.Winner" required>
+            <option value="" disabled selected hidden>Winner</option>
+            <option value="White">White</option>
+            <option value="Black">Black</option>
+            <option value="Draw">Draw</option>
+        </select>
+
+        <input type="datetime-local" asp-for="NewMatch.MatchDate" asp-format="{0:yyyy-MM-ddTHH:mm}" required />
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-success">Save Match</button>
+            <button type="button" onclick="toggleForm()" class="btn btn-secondary">Cancel</button>
+        </div>
+    </form>
+</div>
+
+<table class="match-table">
+    <thead>
+        <tr>
+            <th>White Player</th>
+            <th>Black Player</th>
+            <th>Winner/Draw</th>
+            <th>Date</th>
+            <th class="action-column"></th> 
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (MatchHistoryViewModel match in Model.Matches.OrderByDescending(m => m.MatchDate))
+        {
             <tr>
-                <th>White Player</th>
-                <th>Black Player</th>
-                <th>Winner</th>
-                <th>Date</th>
+                <td>@match.WhitePlayer</td>
+                <td>@match.BlackPlayer</td>
+                <td><strong>@match.Winner</strong></td>
+                <td>@match.MatchDate.ToString("dd MMM yyyy - HH:mm")</td>
+                <td class="action-cell">
+                    <form asp-action="DeleteMatch" method="post" class="delete-form">
+                        <input type="hidden" name="gameId" value="@match.GameID" />
+                        <button type="submit" class="btn btn-danger">Delete</button>
+                    </form>
+                </td>
             </tr>
-        </thead>
-        <tbody>
-            @foreach (var match in Model)
-            {
-                <tr>
-                    <td>@match.WhitePlayer</td>
-                    <td>@match.BlackPlayer</td>
-                    <td><strong>@match.Winner</strong></td>
-                    <td>@match.MatchDate.ToString("dd MMM yyyy - HH:mm")</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+        }
+    </tbody>
+</table>
 
-</body>
-</html>
+<script>
+    function toggleForm() {
+        const form = document.getElementById("addMatchForm");
+        form.classList.toggle("hidden");
+    }
+</script>

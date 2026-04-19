@@ -1,40 +1,64 @@
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.AspNetCore.Mvc;
-using ObjectChess.Business.Services;
 using ObjectChess.Web.ViewModels;
+using ObjectChess.Business.Services;
 using ObjectChess.Data.Models;
 
 namespace ObjectChess.Web.Controllers
 {
     public class MatchController : Controller
     {
-        private readonly IConfiguration _configuration;
+        private readonly MatchService _matchService;
 
-        public MatchController(IConfiguration configuration)
+        public MatchController(MatchService matchService)
         {
-            _configuration = configuration;
+            _matchService = matchService;
         }
 
+        [HttpGet]
         public IActionResult MatchHistory()
         {
-            string connectionString = _configuration.GetConnectionString("DefaultConnection");
+            List<MatchModel> rawMatches = _matchService.GetAllMatches();
             
-            MatchService matchService = new MatchService(connectionString);
-            var rawMatches = matchService.GetAllMatches();
-
-            var viewModels = new List<MatchHistoryViewModel>();
-
-            foreach (var item in rawMatches)
+            List<MatchHistoryViewModel> historyList = rawMatches.Select(item => new MatchHistoryViewModel 
             {
-                viewModels.Add(new MatchHistoryViewModel
-                {
-                    WhitePlayer = item.WhitePlayer,
-                    BlackPlayer = item.BlackPlayer,
-                    Winner = item.Winner,
-                    MatchDate = item.MatchDate
-                });
-            }
+                GameID = item.GameID,
+                WhitePlayer = item.WhitePlayer,
+                BlackPlayer = item.BlackPlayer,
+                Winner = item.Winner,
+                MatchDate = item.MatchDate
+            }).ToList();
 
-            return View(viewModels);
+            MatchHistoryPageViewModel pageModel = new MatchHistoryPageViewModel
+            {
+                Matches = historyList
+            };
+
+            return View(pageModel);
+        }
+
+        [HttpPost]
+        public IActionResult AddMatch(MatchHistoryPageViewModel pageModel)
+        {
+            AddMatchViewModel newMatch = pageModel.NewMatch;
+
+            _matchService.AddMatch(
+                newMatch.WhitePlayer, 
+                newMatch.BlackPlayer, 
+                newMatch.Winner, 
+                newMatch.MatchDate
+            );
+
+            return RedirectToAction("MatchHistory");
+        }
+
+        [HttpPost]
+        public IActionResult DeleteMatch(int gameId)
+        {
+            _matchService.DeleteMatch(gameId);
+
+            return RedirectToAction("MatchHistory");
         }
     }
 }
