@@ -3,7 +3,7 @@ using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using ObjectChess.Web.ViewModels;
 using ObjectChess.Business.Services;
-using ObjectChess.Data.Models;
+using ObjectChess.Business.Models;
 
 namespace ObjectChess.Web.Controllers
 {

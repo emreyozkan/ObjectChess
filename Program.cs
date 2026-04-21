@@ -2,19 +2,24 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using ObjectChess.Data.Repositories;
+using ObjectChess.Business.Services;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 
-builder.Services.AddScoped<ObjectChess.Business.Services.MatchService>(provider => 
+builder.Services.AddScoped<IMatchRepository>(provider => 
 {
-    var configuration = provider.GetRequiredService<IConfiguration>();
-    var connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
-    return new ObjectChess.Business.Services.MatchService(connectionString);
+    IConfiguration configuration = provider.GetRequiredService<IConfiguration>();
+    string connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
+    
+    return new MatchRepository(connectionString);
 });
 
-var app = builder.Build();
+builder.Services.AddScoped<MatchService>();
+
+WebApplication app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
 {
