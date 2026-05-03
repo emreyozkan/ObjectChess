@@ -46,7 +46,7 @@
         </tr>
     </thead>
     <tbody>
-        @foreach (MatchHistoryViewModel match in Model.Matches.OrderByDescending(m => m.MatchDate))
+        @foreach (MatchHistoryViewModel match in Model.Matches)
         {
             <tr>
                 <td>@match.WhitePlayer</td>
@@ -63,6 +63,22 @@
         }
     </tbody>
 </table>
+
+<div class="pagination-container">
+    @if (Model.TotalPages > 1)
+    {
+        <div class="pagination">
+            @for (int i = 1; i <= Model.TotalPages; i++)
+            {
+                <a asp-action="MatchHistory" 
+                   asp-route-page="@i" 
+                   class="btn @(i == Model.CurrentPage ? "btn-primary active" : "btn-outline-primary")">
+                    @i
+                </a>
+            }
+        </div>
+    }
+</div>
 
 <script>
     function toggleForm() {

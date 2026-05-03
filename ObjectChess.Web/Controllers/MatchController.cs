@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ObjectChess.Web.ViewModels;
 using ObjectChess.Business.Services;
 using ObjectChess.Business.Models;
+using System;
 
 namespace ObjectChess.Web.Controllers
 {
@@ -17,22 +18,30 @@ namespace ObjectChess.Web.Controllers
         }
 
         [HttpGet]
-        public IActionResult MatchHistory()
+        public IActionResult MatchHistory(int page = 1)
         {
+            int pageSize = 10;
             List<MatchModel> rawMatches = _matchService.GetAllMatches();
-            
-            List<MatchHistoryViewModel> historyList = rawMatches.Select(item => new MatchHistoryViewModel 
-            {
-                GameID = item.GameID,
-                WhitePlayer = item.WhitePlayer,
-                BlackPlayer = item.BlackPlayer,
-                Winner = item.Winner,
-                MatchDate = item.MatchDate
-            }).ToList();
+            int totalMatches = rawMatches.Count;
+
+            List<MatchHistoryViewModel> historyList = rawMatches
+                .OrderByDescending(m => m.MatchDate)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(item => new MatchHistoryViewModel 
+                {
+                    GameID = item.GameID,
+                    WhitePlayer = item.WhitePlayer,
+                    BlackPlayer = item.BlackPlayer,
+                    Winner = item.Winner,
+                    MatchDate = item.MatchDate
+                }).ToList();
 
             MatchHistoryPageViewModel pageModel = new MatchHistoryPageViewModel
             {
-                Matches = historyList
+                Matches = historyList,
+                CurrentPage = page,
+                TotalPages = (int)Math.Ceiling(totalMatches / (double)pageSize)
             };
 
             return View(pageModel);
