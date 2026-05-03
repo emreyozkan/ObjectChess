@@ -1,5 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap');
+
 html {
   font-size: 14px;
+  position: relative;
+  min-height: 100%;
 }
 
 @media (min-width: 768px) {
@@ -8,21 +12,68 @@ html {
   }
 }
 
-.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
-  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
-}
-
-html {
-  position: relative;
-  min-height: 100%;
-}
-
 body {
+  font-family: 'Rajdhani', sans-serif;
+  background-color: #1a1a1a !important;
+  color: #e8e8e8 !important;
   margin-bottom: 60px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a.navbar-brand {
+  white-space: normal;
+  text-align: center;
+  word-break: break-all;
+  color: #81b64c !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px;
+}
+
+a.navbar-brand:hover {
+  color: #a3d96a !important;
+}
+
+a {
+  color: #66b2ff;
+  text-decoration: none;
+}
+
+.btn-primary {
+  color: #fff;
+  background-color: #81b64c;
+  border-color: #6a9c3a;
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem #1a1a1a, 0 0 0 0.25rem #81b64c;
+}
+
+.border-top {
+  border-top: 1px solid #333 !important;
+}
+
+.border-bottom {
+  border-bottom: 1px solid #333 !important;
+}
+
+.box-shadow {
+  box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .4);
+}
+
+.footer {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  white-space: nowrap;
+  line-height: 60px;
+}
+
+.text-muted {
+  color: #888 !important;
 }
 
 .form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
-  color: var(--bs-secondary-color);
+  color: #888;
   text-align: end;
 }
 
