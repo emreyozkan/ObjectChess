@@ -35,3 +35,6 @@
 /Users/emreyozkan/ObjectChess /ObjectChess.Data/obj/Debug/net10.0/refint/ObjectChess.Data.dll
 /Users/emreyozkan/ObjectChess /ObjectChess.Data/obj/Debug/net10.0/ObjectChess.Data.pdb
 /Users/emreyozkan/ObjectChess /ObjectChess.Data/obj/Debug/net10.0/ref/ObjectChess.Data.dll
+/Users/emreyozkan/ObjectChess /ObjectChess.Data/bin/Debug/net10.0/ObjectChess.Business.dll
+/Users/emreyozkan/ObjectChess /ObjectChess.Data/bin/Debug/net10.0/ObjectChess.Business.pdb
+/Users/emreyozkan/ObjectChess /ObjectChess.Data/obj/Debug/net10.0/ObjectCh.5DF3FD33.Up2Date

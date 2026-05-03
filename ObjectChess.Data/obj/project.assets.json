@@ -222,6 +222,16 @@
         "runtime": {
           "lib/net9.0/ZstdSharp.dll": {}
         }
+      },
+      "ObjectChess.Business/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "compile": {
+          "bin/placeholder/ObjectChess.Business.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/ObjectChess.Business.dll": {}
+        }
       }
     }
   },
@@ -546,11 +556,17 @@
         "zstdsharp.port.0.8.6.nupkg.sha512",
         "zstdsharp.port.nuspec"
       ]
+    },
+    "ObjectChess.Business/1.0.0": {
+      "type": "project",
+      "path": "../ObjectChess.Business/ObjectChess.Business.csproj",
+      "msbuildProject": "../ObjectChess.Business/ObjectChess.Business.csproj"
     }
   },
   "projectFileDependencyGroups": {
     "net10.0": [
-      "MySql.Data >= 9.6.0"
+      "MySql.Data >= 9.6.0",
+      "ObjectChess.Business >= 1.0.0"
     ]
   },
   "packageFolders": {
@@ -577,7 +593,11 @@
       "frameworks": {
         "net10.0": {
           "targetAlias": "net10.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "/Users/emreyozkan/ObjectChess /ObjectChess.Business/ObjectChess.Business.csproj": {
+              "projectPath": "/Users/emreyozkan/ObjectChess /ObjectChess.Business/ObjectChess.Business.csproj"
+            }
+          }
         }
       },
       "warningProperties": {

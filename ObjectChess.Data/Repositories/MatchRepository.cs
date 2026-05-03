@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
 using MySql.Data.MySqlClient;
-using ObjectChess.Data.Entities;
+using ObjectChess.Business.Models; 
+using ObjectChess.Business.Interfaces;
 
 namespace ObjectChess.Data.Repositories
 {
-    public class MatchRepository
+    public class MatchRepository : IMatchRepository
     {
         private readonly string _connectionString;
 
@@ -14,9 +15,9 @@ namespace ObjectChess.Data.Repositories
             _connectionString = connectionString;
         }
 
-        public List<MatchEntity> GetAllMatches()
+        public List<MatchModel> GetAllMatches()
         {
-            List<MatchEntity> matchHistoryList = new List<MatchEntity>();
+            List<MatchModel> matchHistoryList = new List<MatchModel>();
 
             using (MySqlConnection connection = new MySqlConnection(_connectionString))
             {
@@ -41,16 +42,16 @@ namespace ObjectChess.Data.Repositories
                     {
                         while (reader.Read())
                         {
-                            MatchEntity match = new MatchEntity();
+                            MatchModel match = new MatchModel();
 
                             match.GameID = Convert.ToInt32(reader["GameID"]);
-                            match.WhitePlayer = reader["WhitePlayer"].ToString();
-                            match.BlackPlayer = reader["BlackPlayer"].ToString();
+                            match.WhitePlayer = reader["WhitePlayer"]?.ToString() ?? "";
+                            match.BlackPlayer = reader["BlackPlayer"]?.ToString() ?? "";
                             match.MatchDate = Convert.ToDateTime(reader["MatchDate"]);
 
                             if (reader["Winner"] != DBNull.Value)
                             {
-                                match.Winner = reader["Winner"].ToString();
+                                match.Winner = reader["Winner"]?.ToString() ?? "Draw";
                             }
                             else
                             {
@@ -72,7 +73,7 @@ namespace ObjectChess.Data.Repositories
             using (MySqlCommand checkCmd = new MySqlCommand(checkQuery, connection))
             {
                 checkCmd.Parameters.AddWithValue("@Username", username);
-                object result = checkCmd.ExecuteScalar();
+                object? result = checkCmd.ExecuteScalar();
                 
                 if (result != null)
                 {
@@ -84,7 +85,8 @@ namespace ObjectChess.Data.Repositories
             using (MySqlCommand insertCmd = new MySqlCommand(insertQuery, connection))
             {
                 insertCmd.Parameters.AddWithValue("@Username", username);
-                return Convert.ToInt32(insertCmd.ExecuteScalar());
+                object? newId = insertCmd.ExecuteScalar();
+                return newId != null ? Convert.ToInt32(newId) : 0;
             }
         }
 
@@ -111,7 +113,7 @@ namespace ObjectChess.Data.Repositories
                 {
                     command.Parameters.AddWithValue("@WhiteID", whiteId);
                     command.Parameters.AddWithValue("@BlackID", blackId);
-                    command.Parameters.AddWithValue("@WinnerID", (object)winnerId ?? DBNull.Value);
+                    command.Parameters.AddWithValue("@WinnerID", (object?)winnerId ?? DBNull.Value);
                     command.Parameters.AddWithValue("@Date", matchDate);
 
                     command.ExecuteNonQuery();

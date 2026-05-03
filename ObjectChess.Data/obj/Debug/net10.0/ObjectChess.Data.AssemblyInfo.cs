@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ObjectChess.Data")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b274205721f0c1ce124a63a34b52b18270ca803e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+84bcc5363d7206e29b4e1894c974a104b7bb948f")]
 [assembly: System.Reflection.AssemblyProductAttribute("ObjectChess.Data")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ObjectChess.Data")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

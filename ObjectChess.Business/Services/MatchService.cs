@@ -1,38 +1,37 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using ObjectChess.Business.Models;
-using ObjectChess.Data.Entities;
-using ObjectChess.Data.Repositories;
+using ObjectChess.Business.Interfaces;
 
 namespace ObjectChess.Business.Services
 {
-    public class MatchService
+    public class MatchService : IMatchService
     {
-        private readonly MatchRepository _matchRepository;
+        private readonly IMatchRepository _matchRepository;
 
-        public MatchService(string connectionString)
+        public MatchService(IMatchRepository matchRepository)
         {
-            _matchRepository = new MatchRepository(connectionString);
+            _matchRepository = matchRepository;
         }
 
         public List<MatchModel> GetAllMatches()
         {
-            List<MatchEntity> entities = _matchRepository.GetAllMatches();
-            List<MatchModel> models = new List<MatchModel>();
+            return _matchRepository.GetAllMatches();
+        }
 
-            foreach (var entity in entities)
-            {
-                models.Add(new MatchModel
-                {
-                    GameID = entity.GameID,
-                    WhitePlayer = entity.WhitePlayer ?? "", 
-                    BlackPlayer = entity.BlackPlayer ?? "",
-                    Winner = entity.Winner ?? "Draw",
-                    MatchDate = entity.MatchDate
-                });
-            }
+        public int GetTotalMatchCount()
+        {
+            return _matchRepository.GetAllMatches().Count;
+        }
 
-            return models;
+        public List<MatchModel> GetPagedMatches(int page, int pageSize)
+        {
+            return _matchRepository.GetAllMatches()
+                .OrderByDescending(m => m.MatchDate)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList();
         }
 
         public void AddMatch(string whitePlayer, string blackPlayer, string winner, DateTime matchDate)

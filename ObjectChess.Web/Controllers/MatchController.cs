@@ -2,17 +2,17 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using ObjectChess.Web.ViewModels;
-using ObjectChess.Business.Services;
 using ObjectChess.Business.Models;
+using ObjectChess.Business.Interfaces;
 using System;
 
 namespace ObjectChess.Web.Controllers
 {
     public class MatchController : Controller
     {
-        private readonly MatchService _matchService;
+        private readonly IMatchService _matchService;
 
-        public MatchController(MatchService matchService)
+        public MatchController(IMatchService matchService)
         {
             _matchService = matchService;
         }
@@ -21,13 +21,11 @@ namespace ObjectChess.Web.Controllers
         public IActionResult MatchHistory(int page = 1)
         {
             int pageSize = 10;
-            List<MatchModel> rawMatches = _matchService.GetAllMatches();
-            int totalMatches = rawMatches.Count;
+            int totalMatches = _matchService.GetTotalMatchCount();
 
-            List<MatchHistoryViewModel> historyList = rawMatches
-                .OrderByDescending(m => m.MatchDate)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
+            List<MatchModel> pagedRawMatches = _matchService.GetPagedMatches(page, pageSize);
+
+            List<MatchHistoryViewModel> historyList = pagedRawMatches
                 .Select(item => new MatchHistoryViewModel 
                 {
                     GameID = item.GameID,
@@ -50,12 +48,12 @@ namespace ObjectChess.Web.Controllers
         [HttpPost]
         public IActionResult AddMatch(MatchHistoryPageViewModel pageModel)
         {
-            AddMatchViewModel newMatch = pageModel.NewMatch;
+            var newMatch = pageModel.NewMatch;
 
             _matchService.AddMatch(
-                newMatch.WhitePlayer, 
-                newMatch.BlackPlayer, 
-                newMatch.Winner, 
+                newMatch.WhitePlayer ?? "", 
+                newMatch.BlackPlayer ?? "", 
+                newMatch.Winner ?? "", 
                 newMatch.MatchDate
             );
 

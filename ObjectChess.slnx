@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/ObjectChess.Web/">
+    <Project Path="ObjectChess.Web/ObjectChess.csproj" />
+  </Folder>
+  <Project Path="ObjectChess.Business/ObjectChess.Business.csproj" />
+  <Project Path="ObjectChess.Data/ObjectChess.Data.csproj" />
+  <Project Path="ObjectChess.Tests/ObjectChess.Tests.csproj" />
+</Solution>

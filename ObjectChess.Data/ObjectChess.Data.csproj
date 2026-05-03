@@ -10,4 +10,8 @@
     <PackageReference Include="MySql.Data" Version="9.6.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\ObjectChess.Business\ObjectChess.Business.csproj" />
+  </ItemGroup>
+
 </Project>

@@ -1,4 +1,6 @@
+using ObjectChess.Business.Interfaces;
 using ObjectChess.Business.Services;
+using ObjectChess.Data.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -6,7 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 
 string connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
-builder.Services.AddScoped<MatchService>(provider => new MatchService(connectionString));
+
+builder.Services.AddScoped<IMatchRepository>(provider => new MatchRepository(connectionString));
+builder.Services.AddScoped<IMatchService, MatchService>();
 
 var app = builder.Build();
 
