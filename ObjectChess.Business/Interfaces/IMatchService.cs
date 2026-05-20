@@ -6,9 +6,9 @@ namespace ObjectChess.Business.Interfaces
 {
     public interface IMatchService
     {
+        int GetTotalMatchCount(string playerName);
+        List<MatchModel> GetPagedMatches(string playerName, int page, int pageSize);
         List<MatchModel> GetAllMatches();
-        int GetTotalMatchCount();
-        List<MatchModel> GetPagedMatches(int page, int pageSize);
         void AddMatch(string whitePlayer, string blackPlayer, string winner, DateTime matchDate);
         void AddMatchWithMoves(MatchModel model, List<string> rawMoves);
         void DeleteMatch(int gameId);

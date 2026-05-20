@@ -1,0 +1,35 @@
+@model ObjectChess.Web.ViewModels.LoginViewModel
+
+@{
+    ViewData["Title"] = "Login";
+    Layout = "_Layout";
+}
+
+<div class="auth-container">
+    <div class="auth-card">
+        <h2 class="auth-title">Welcome Back</h2>
+        <p class="auth-subtitle">Sign in to ObjectChess</p>
+
+        <form asp-action="Login" method="post">
+            <div asp-validation-summary="ModelOnly" class="error-summary"></div>
+
+            <div class="form-group">
+                <label asp-for="Email">Email Address</label>
+                <input asp-for="Email" class="form-control" placeholder="Enter your email" required />
+                <span asp-validation-for="Email" class="error-text"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Password">Password</label>
+                <input asp-for="Password" class="form-control" placeholder="Enter your password" required />
+                <span asp-validation-for="Password" class="error-text"></span>
+            </div>
+
+            <button type="submit" class="btn auth-btn">Login</button>
+        </form>
+
+        <div class="auth-footer">
+            Don't have an account? <a asp-action="Register" class="auth-link">Register here</a>
+        </div>
+    </div>
+</div>

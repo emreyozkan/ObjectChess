@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization; 
 using ObjectChess.Web.ViewModels;
 
 namespace ObjectChess.Web.Controllers;
 
+[Authorize] 
 public class HomeController : Controller
 {
     public IActionResult Index()
@@ -16,6 +18,7 @@ public class HomeController : Controller
         return View();
     }
 
+    [AllowAnonymous] 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
     public IActionResult Error()
     {

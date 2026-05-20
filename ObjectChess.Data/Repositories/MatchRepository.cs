@@ -16,16 +16,23 @@ namespace ObjectChess.Data.Repositories
             _connectionString = connectionString;
         }
 
-        public int GetTotalMatchCount()
+        public int GetTotalMatchCount(string playerName)
         {
             try
             {
                 using (MySqlConnection connection = new MySqlConnection(_connectionString))
                 {
                     connection.Open();
-                    string query = "SELECT COUNT(*) FROM Games;";
+                    string query = @"
+                        SELECT COUNT(*) 
+                        FROM Games g
+                        JOIN Players White ON g.WhitePlayerID = White.PlayerID
+                        JOIN Players Black ON g.BlackPlayerID = Black.PlayerID
+                        WHERE White.FullName = @PlayerName OR Black.FullName = @PlayerName;";
+
                     using (MySqlCommand command = new MySqlCommand(query, connection))
                     {
+                        command.Parameters.AddWithValue("@PlayerName", playerName);
                         return Convert.ToInt32(command.ExecuteScalar());
                     }
                 }
@@ -36,7 +43,7 @@ namespace ObjectChess.Data.Repositories
             }
         }
 
-        public List<MatchModel> GetPagedMatches(int page, int pageSize)
+        public List<MatchModel> GetPagedMatches(string playerName, int page, int pageSize)
         {
             List<MatchModel> pagedMatches = new List<MatchModel>();
             int offset = (page - 1) * pageSize;
@@ -50,19 +57,21 @@ namespace ObjectChess.Data.Repositories
                     string matchQuery = @"
                         SELECT 
                             g.GameID,
-                            White.Username AS WhitePlayer, 
-                            Black.Username AS BlackPlayer, 
-                            Winner.Username AS Winner, 
+                            White.FullName AS WhitePlayer, 
+                            Black.FullName AS BlackPlayer, 
+                            Winner.FullName AS Winner, 
                             g.MatchDate 
                         FROM Games g
                         JOIN Players White ON g.WhitePlayerID = White.PlayerID
                         JOIN Players Black ON g.BlackPlayerID = Black.PlayerID
                         LEFT JOIN Players Winner ON g.WinnerID = Winner.PlayerID
+                        WHERE White.FullName = @PlayerName OR Black.FullName = @PlayerName
                         ORDER BY g.MatchDate DESC
                         LIMIT @Limit OFFSET @Offset;";
 
                     using (MySqlCommand command = new MySqlCommand(matchQuery, connection))
                     {
+                        command.Parameters.AddWithValue("@PlayerName", playerName);
                         command.Parameters.AddWithValue("@Limit", pageSize);
                         command.Parameters.AddWithValue("@Offset", offset);
 
@@ -126,15 +135,15 @@ namespace ObjectChess.Data.Repositories
 
         public List<MatchModel> GetAllMatches()
         {
-            return GetPagedMatches(1, int.MaxValue); 
+            return GetPagedMatches("", 1, int.MaxValue); 
         }
 
-        private int GetOrCreatePlayer(MySqlConnection connection, MySqlTransaction transaction, string username)
+        private int GetOrCreatePlayer(MySqlConnection connection, MySqlTransaction transaction, string playerName)
         {
-            string checkQuery = "SELECT PlayerID FROM Players WHERE Username = @Username;";
+            string checkQuery = "SELECT PlayerID FROM Players WHERE FullName = @FullName;";
             using (MySqlCommand checkCmd = new MySqlCommand(checkQuery, connection, transaction))
             {
-                checkCmd.Parameters.AddWithValue("@Username", username);
+                checkCmd.Parameters.AddWithValue("@FullName", playerName);
                 object? result = checkCmd.ExecuteScalar();
                 
                 if (result != null)
@@ -143,10 +152,10 @@ namespace ObjectChess.Data.Repositories
                 }
             }
 
-            string insertQuery = "INSERT INTO Players (Username) VALUES (@Username); SELECT LAST_INSERT_ID();";
+            string insertQuery = "INSERT INTO Players (FullName) VALUES (@FullName); SELECT LAST_INSERT_ID();";
             using (MySqlCommand insertCmd = new MySqlCommand(insertQuery, connection, transaction))
             {
-                insertCmd.Parameters.AddWithValue("@Username", username);
+                insertCmd.Parameters.AddWithValue("@FullName", playerName);
                 object? newId = insertCmd.ExecuteScalar();
                 return newId != null ? Convert.ToInt32(newId) : 0;
             }

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using ObjectChess.Business.Models;
 using ObjectChess.Business.Interfaces;
 
@@ -15,27 +14,19 @@ namespace ObjectChess.Business.Services
             _matchRepository = matchRepository;
         }
 
-        private bool IsValidChessMove(string moveText)
+        public int GetTotalMatchCount(string playerName)
         {
-            if (string.IsNullOrEmpty(moveText)) return true;
+            return _matchRepository.GetTotalMatchCount(playerName);
+        }
 
-            string pattern = @"^(?:[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?[+#]?)$";
-            return Regex.IsMatch(moveText, pattern);
+        public List<MatchModel> GetPagedMatches(string playerName, int page, int pageSize)
+        {
+            return _matchRepository.GetPagedMatches(playerName, page, pageSize);
         }
 
         public List<MatchModel> GetAllMatches()
         {
             return _matchRepository.GetAllMatches();
-        }
-
-        public int GetTotalMatchCount()
-        {
-            return _matchRepository.GetTotalMatchCount();
-        }
-
-        public List<MatchModel> GetPagedMatches(int page, int pageSize)
-        {
-            return _matchRepository.GetPagedMatches(page, pageSize);
         }
 
         public void AddMatch(string whitePlayer, string blackPlayer, string winner, DateTime matchDate)
@@ -45,22 +36,19 @@ namespace ObjectChess.Business.Services
 
         public void AddMatchWithMoves(MatchModel model, List<string> rawMoves)
         {
-            if (rawMoves != null && rawMoves.Count > 0)
+            int currentMoveNumber = 1;
+            for (int i = 0; i < rawMoves.Count; i++)
             {
-                int counter = 1;
-                foreach (string cleanMove in rawMoves)
+                MoveModel move = new MoveModel
                 {
-                    if (!IsValidChessMove(cleanMove))
-                    {
-                        throw new ArgumentException($"Invalid chess move detected: {cleanMove}");
-                    }
+                    MoveNumber = currentMoveNumber,
+                    MoveText = rawMoves[i]
+                };
+                model.Moves.Add(move);
 
-                    model.Moves.Add(new MoveModel
-                    {
-                        MoveNumber = counter,
-                        MoveText = cleanMove
-                    });
-                    counter++;
+                if ((i + 1) % 2 == 0)
+                {
+                    currentMoveNumber++;
                 }
             }
 

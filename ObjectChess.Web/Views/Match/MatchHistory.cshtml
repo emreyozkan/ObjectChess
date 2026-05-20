@@ -1,5 +1,6 @@
 @model ObjectChess.Web.ViewModels.MatchHistoryPageViewModel
 @using ObjectChess.Web.ViewModels
+@using ObjectChess.Business.Models
 
 @{
     ViewData["Title"] = "Match History";
@@ -16,15 +17,20 @@
 
 <div id="addMatchForm" class="form-container @(ViewData.ModelState.IsValid ? "hidden" : "")">
     <form asp-action="AddMatch" method="post" class="match-form">
-        <input type="text" asp-for="NewMatch.WhitePlayer" placeholder="White Player" required />
-        <input type="text" asp-for="NewMatch.BlackPlayer" placeholder="Black Player" required />
+        
+        <input type="text" asp-for="NewMatch.WhitePlayer" placeholder="White Player (Type 'Me' for yourself)" list="playerOptions" required />
+        <input type="text" asp-for="NewMatch.BlackPlayer" placeholder="Black Player (Type 'Me' for yourself)" list="playerOptions" required />
 
-        <select asp-for="NewMatch.Winner" required>
-            <option value="" disabled selected hidden>Select Result</option>
-            <option value="White">White Wins</option>
-            <option value="Black">Black Wins</option>
-            <option value="Draw">Draw</option>
-        </select>
+        <datalist id="playerOptions">
+            <option value="Me"></option>
+        </datalist>
+
+        <input type="text" asp-for="NewMatch.Winner" placeholder="Winner (Type 'Me', Name, or 'Draw')" list="winnerOptions" required />
+        
+        <datalist id="winnerOptions">
+            <option value="Me"></option>
+            <option value="Draw"></option>
+        </datalist>
 
         <input type="datetime-local" asp-for="NewMatch.MatchDate" asp-format="{0:yyyy-MM-ddTHH:mm}" required />
 
@@ -82,13 +88,14 @@
                         @if (match.Moves != null && match.Moves.Any())
                         {
                             <div style="display: flex; flex-wrap: wrap; gap: 10px; font-family: monospace; font-size: 14px;">
-                                @foreach (var move in match.Moves)
+                                @for (int i = 0; i < match.Moves.Count; i++)
                                 {
-                                    if (move.MoveNumber % 2 != 0)
+                                    MoveModel currentMove = match.Moves[i];
+                                    if (i % 2 == 0)
                                     {
-                                        <span style="color: #888; margin-right: -4px;">@(((move.MoveNumber + 1) / 2)).</span>
+                                        <span style="color: #888; margin-right: -4px;">@(currentMove.MoveNumber).</span>
                                     }
-                                    <span style="background-color: #2a2a2a; padding: 2px 6px; border-radius: 3px;">@move.MoveText</span>
+                                    <span style="background-color: #2a2a2a; padding: 2px 6px; border-radius: 3px;">@currentMove.MoveText</span>
                                 }
                             </div>
                         }

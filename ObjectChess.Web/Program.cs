@@ -1,8 +1,12 @@
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Configuration;
 using ObjectChess.Business.Interfaces;
 using ObjectChess.Business.Services;
 using ObjectChess.Data.Repositories;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
@@ -11,8 +15,22 @@ string connectionString = builder.Configuration.GetConnectionString("DefaultConn
 
 builder.Services.AddScoped<IMatchRepository>(provider => new MatchRepository(connectionString));
 builder.Services.AddScoped<IMatchService, MatchService>();
+builder.Services.AddScoped<IAuthRepository>(provider => new AuthRepository(connectionString));
+builder.Services.AddScoped<IAuthService, AuthService>();
 
-var app = builder.Build();
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = "ObjectChessAuth";
+    options.DefaultChallengeScheme = "ObjectChessAuth";
+})
+.AddCookie("ObjectChessAuth", options =>
+{
+    options.Cookie.Name = "ObjectChess.Cookie";
+    options.LoginPath = "/Auth/Login";
+    options.ExpireTimeSpan = System.TimeSpan.FromHours(2);
+});
+
+WebApplication app = builder.Build();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -25,13 +43,14 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}")
+    pattern: "{controller=Match}/{action=MatchHistory}/{id?}")
     .WithStaticAssets();
 
 app.Run();

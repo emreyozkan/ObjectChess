@@ -2,12 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization; 
 using ObjectChess.Web.ViewModels;
 using ObjectChess.Business.Models;
 using ObjectChess.Business.Interfaces;
 
 namespace ObjectChess.Web.Controllers
 {
+    [Authorize] 
     public class MatchController : Controller
     {
         private readonly IMatchService _matchService;
@@ -20,20 +22,39 @@ namespace ObjectChess.Web.Controllers
         [HttpGet]
         public IActionResult MatchHistory(int page = 1)
         {
-            MatchHistoryPageViewModel model = GetMatchHistoryViewModel(page);
+            string currentFullName = User.Identity?.Name ?? "";
+            MatchHistoryPageViewModel model = GetMatchHistoryViewModel(currentFullName, page);
             return View(model);
         }
 
         [HttpPost]
         public IActionResult AddMatch(MatchHistoryPageViewModel pageModel)
         {
+            string currentFullName = User.Identity?.Name ?? "";
             AddMatchViewModel newMatch = pageModel.NewMatch;
+
+            string whiteValue = newMatch.WhitePlayer ?? "";
+            string blackValue = newMatch.BlackPlayer ?? "";
+            string winnerValue = newMatch.Winner ?? "";
+
+            if (whiteValue.Equals("Me", StringComparison.OrdinalIgnoreCase))
+            {
+                whiteValue = currentFullName;
+            }
+            if (blackValue.Equals("Me", StringComparison.OrdinalIgnoreCase))
+            {
+                blackValue = currentFullName;
+            }
+            if (winnerValue.Equals("Me", StringComparison.OrdinalIgnoreCase))
+            {
+                winnerValue = currentFullName;
+            }
 
             MatchModel matchModel = new MatchModel
             {
-                WhitePlayer = newMatch.WhitePlayer ?? "",
-                BlackPlayer = newMatch.BlackPlayer ?? "",
-                Winner = newMatch.Winner ?? "",
+                WhitePlayer = whiteValue,
+                BlackPlayer = blackValue,
+                Winner = winnerValue,
                 MatchDate = newMatch.MatchDate,
                 Moves = new List<MoveModel>()
             };
@@ -65,7 +86,7 @@ namespace ObjectChess.Web.Controllers
             {
                 ModelState.AddModelError("NewMatch.RawMovesText", ex.Message);
                 
-                MatchHistoryPageViewModel errorModel = GetMatchHistoryViewModel(1);
+                MatchHistoryPageViewModel errorModel = GetMatchHistoryViewModel(currentFullName, 1);
                 errorModel.NewMatch = pageModel.NewMatch; 
                 
                 return View("MatchHistory", errorModel);
@@ -81,11 +102,11 @@ namespace ObjectChess.Web.Controllers
             return RedirectToAction("MatchHistory");
         }
 
-        private MatchHistoryPageViewModel GetMatchHistoryViewModel(int page)
+        private MatchHistoryPageViewModel GetMatchHistoryViewModel(string playerName, int page)
         {
             int pageSize = 10;
-            int totalMatches = _matchService.GetTotalMatchCount();
-            List<MatchModel> pagedRawMatches = _matchService.GetPagedMatches(page, pageSize);
+            int totalMatches = _matchService.GetTotalMatchCount(playerName);
+            List<MatchModel> pagedRawMatches = _matchService.GetPagedMatches(playerName, page, pageSize);
 
             List<MatchHistoryViewModel> historyList = pagedRawMatches
                 .Select(item => new MatchHistoryViewModel 
