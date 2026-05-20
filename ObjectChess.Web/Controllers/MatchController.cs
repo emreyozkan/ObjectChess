@@ -1,10 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.AspNetCore.Mvc;
 using ObjectChess.Web.ViewModels;
 using ObjectChess.Business.Models;
 using ObjectChess.Business.Interfaces;
-using System;
 
 namespace ObjectChess.Web.Controllers
 {
@@ -20,9 +20,71 @@ namespace ObjectChess.Web.Controllers
         [HttpGet]
         public IActionResult MatchHistory(int page = 1)
         {
+            MatchHistoryPageViewModel model = GetMatchHistoryViewModel(page);
+            return View(model);
+        }
+
+        [HttpPost]
+        public IActionResult AddMatch(MatchHistoryPageViewModel pageModel)
+        {
+            AddMatchViewModel newMatch = pageModel.NewMatch;
+
+            MatchModel matchModel = new MatchModel
+            {
+                WhitePlayer = newMatch.WhitePlayer ?? "",
+                BlackPlayer = newMatch.BlackPlayer ?? "",
+                Winner = newMatch.Winner ?? "",
+                MatchDate = newMatch.MatchDate,
+                Moves = new List<MoveModel>()
+            };
+
+            List<string> parsedMoves = new List<string>();
+
+            if (!string.IsNullOrEmpty(newMatch.RawMovesText))
+            {
+                string normalizedText = newMatch.RawMovesText.Replace("\r\n", " ").Replace("\n", " ");
+                string[] splitMoves = normalizedText.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (string moveStr in splitMoves)
+                {
+                    string cleanMove = moveStr.Trim();
+
+                    if (cleanMove.EndsWith(".") || int.TryParse(cleanMove, out _))
+                    {
+                        continue;
+                    }
+                    parsedMoves.Add(cleanMove);
+                }
+            }
+
+            try
+            {
+                _matchService.AddMatchWithMoves(matchModel, parsedMoves);
+            }
+            catch (ArgumentException ex)
+            {
+                ModelState.AddModelError("NewMatch.RawMovesText", ex.Message);
+                
+                MatchHistoryPageViewModel errorModel = GetMatchHistoryViewModel(1);
+                errorModel.NewMatch = pageModel.NewMatch; 
+                
+                return View("MatchHistory", errorModel);
+            }
+
+            return RedirectToAction("MatchHistory");
+        }
+
+        [HttpPost]
+        public IActionResult DeleteMatch(int gameId)
+        {
+            _matchService.DeleteMatch(gameId);
+            return RedirectToAction("MatchHistory");
+        }
+
+        private MatchHistoryPageViewModel GetMatchHistoryViewModel(int page)
+        {
             int pageSize = 10;
             int totalMatches = _matchService.GetTotalMatchCount();
-
             List<MatchModel> pagedRawMatches = _matchService.GetPagedMatches(page, pageSize);
 
             List<MatchHistoryViewModel> historyList = pagedRawMatches
@@ -32,40 +94,17 @@ namespace ObjectChess.Web.Controllers
                     WhitePlayer = item.WhitePlayer,
                     BlackPlayer = item.BlackPlayer,
                     Winner = item.Winner,
-                    MatchDate = item.MatchDate
+                    MatchDate = item.MatchDate,
+                    Moves = item.Moves ?? new List<MoveModel>()
                 }).ToList();
 
-            MatchHistoryPageViewModel pageModel = new MatchHistoryPageViewModel
+            return new MatchHistoryPageViewModel
             {
                 Matches = historyList,
                 CurrentPage = page,
-                TotalPages = (int)Math.Ceiling(totalMatches / (double)pageSize)
+                TotalPages = (int)Math.Ceiling(totalMatches / (double)pageSize),
+                NewMatch = new AddMatchViewModel() 
             };
-
-            return View(pageModel);
-        }
-
-        [HttpPost]
-        public IActionResult AddMatch(MatchHistoryPageViewModel pageModel)
-        {
-            var newMatch = pageModel.NewMatch;
-
-            _matchService.AddMatch(
-                newMatch.WhitePlayer ?? "", 
-                newMatch.BlackPlayer ?? "", 
-                newMatch.Winner ?? "", 
-                newMatch.MatchDate
-            );
-
-            return RedirectToAction("MatchHistory");
-        }
-
-        [HttpPost]
-        public IActionResult DeleteMatch(int gameId)
-        {
-            _matchService.DeleteMatch(gameId);
-
-            return RedirectToAction("MatchHistory");
         }
     }
 }

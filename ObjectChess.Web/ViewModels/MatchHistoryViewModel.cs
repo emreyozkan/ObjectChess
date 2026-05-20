@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ObjectChess.Business.Models;
 
 namespace ObjectChess.Web.ViewModels
 {
@@ -9,5 +11,6 @@ namespace ObjectChess.Web.ViewModels
         public string? BlackPlayer { get; set; }
         public string? Winner { get; set; }
         public DateTime MatchDate { get; set; }
+        public List<MoveModel> Moves { get; set; } = new List<MoveModel>();
     }
 }

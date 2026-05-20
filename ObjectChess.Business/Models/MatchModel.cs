@@ -7,5 +7,6 @@ namespace ObjectChess.Business.Models
         public string BlackPlayer { get; set; } = string.Empty;
         public string Winner { get; set; } = string.Empty;
         public DateTime MatchDate { get; set; }
+        public List<MoveModel> Moves { get; set; } = new List<MoveModel>();
     }
 }

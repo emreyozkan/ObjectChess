@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace ObjectChess.Web.ViewModels
 {
@@ -7,6 +8,7 @@ namespace ObjectChess.Web.ViewModels
         public string? WhitePlayer { get; set; }
         public string? BlackPlayer { get; set; }
         public string? Winner { get; set; }
-        public DateTime MatchDate { get; set; } = DateTime.Now;
+        public DateTime MatchDate { get; set; }
+        public string? RawMovesText { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Text.RegularExpressions;
 using ObjectChess.Business.Models;
 using ObjectChess.Business.Interfaces;
 
@@ -15,6 +15,14 @@ namespace ObjectChess.Business.Services
             _matchRepository = matchRepository;
         }
 
+        private bool IsValidChessMove(string moveText)
+        {
+            if (string.IsNullOrEmpty(moveText)) return true;
+
+            string pattern = @"^(?:[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?[+#]?)$";
+            return Regex.IsMatch(moveText, pattern);
+        }
+
         public List<MatchModel> GetAllMatches()
         {
             return _matchRepository.GetAllMatches();
@@ -22,21 +30,41 @@ namespace ObjectChess.Business.Services
 
         public int GetTotalMatchCount()
         {
-            return _matchRepository.GetAllMatches().Count;
+            return _matchRepository.GetTotalMatchCount();
         }
 
         public List<MatchModel> GetPagedMatches(int page, int pageSize)
         {
-            return _matchRepository.GetAllMatches()
-                .OrderByDescending(m => m.MatchDate)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .ToList();
+            return _matchRepository.GetPagedMatches(page, pageSize);
         }
 
         public void AddMatch(string whitePlayer, string blackPlayer, string winner, DateTime matchDate)
         {
             _matchRepository.AddMatch(whitePlayer, blackPlayer, winner, matchDate);
+        }
+
+        public void AddMatchWithMoves(MatchModel model, List<string> rawMoves)
+        {
+            if (rawMoves != null && rawMoves.Count > 0)
+            {
+                int counter = 1;
+                foreach (string cleanMove in rawMoves)
+                {
+                    if (!IsValidChessMove(cleanMove))
+                    {
+                        throw new ArgumentException($"Invalid chess move detected: {cleanMove}");
+                    }
+
+                    model.Moves.Add(new MoveModel
+                    {
+                        MoveNumber = counter,
+                        MoveText = cleanMove
+                    });
+                    counter++;
+                }
+            }
+
+            _matchRepository.AddMatchWithMoves(model);
         }
 
         public void DeleteMatch(int gameId)
