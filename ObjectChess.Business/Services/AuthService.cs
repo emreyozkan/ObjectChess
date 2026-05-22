@@ -15,6 +15,11 @@ namespace ObjectChess.Business.Services
 
         public void Register(string fullName, string email, string password)
         {
+            if (string.IsNullOrWhiteSpace(fullName) || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            {
+                throw new ArgumentException("Inputs cannot be empty.");
+            }
+
             bool emailExists = _authRepository.CheckIfEmailExists(email);
             
             if (emailExists)
