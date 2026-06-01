@@ -25,7 +25,7 @@ namespace ObjectChess.Tests
                 Moves = new List<MoveModel>()
             };
 
-            fakeRepository.AddMatchWithMoves(match);
+            fakeRepository.AddMatch(match);
 
             int count = matchService.GetTotalMatchCount(playerEmail);
 
@@ -49,11 +49,13 @@ namespace ObjectChess.Tests
                     MatchDate = DateTime.Now,
                     Moves = new List<MoveModel>()
                 };
-                fakeRepository.AddMatchWithMoves(match);
+
+                fakeRepository.AddMatch(match);
             }
 
             int offset = 0;
             int pageSize = 2;
+
             List<MatchModel> matches = matchService.GetPagedMatches(playerEmail, offset, pageSize);
 
             Assert.Equal(2, matches.Count);
@@ -75,11 +77,13 @@ namespace ObjectChess.Tests
                 MatchDate = DateTime.Now,
                 Moves = new List<MoveModel>()
             };
-            fakeRepository.AddMatchWithMoves(match);
+
+            fakeRepository.AddMatch(match);
 
             matchService.DeleteMatch(1);
 
             int count = matchService.GetTotalMatchCount(playerEmail);
+
             Assert.Equal(0, count);
         }
 
@@ -119,6 +123,7 @@ namespace ObjectChess.Tests
 
             int offset = 10;
             int pageSize = 5;
+
             List<MatchModel> matches = matchService.GetPagedMatches(playerEmail, offset, pageSize);
 
             Assert.Empty(matches);
@@ -130,7 +135,7 @@ namespace ObjectChess.Tests
             FakeMatchRepository fakeRepository = new FakeMatchRepository();
             MatchService matchService = new MatchService(fakeRepository);
 
-            Exception? exception = Record.Exception(() => matchService.DeleteMatch(999));
+            Exception exception = Record.Exception(() => matchService.DeleteMatch(999));
 
             Assert.Null(exception);
         }
@@ -140,7 +145,7 @@ namespace ObjectChess.Tests
         {
             FakeMatchRepository fakeRepository = new FakeMatchRepository();
             MatchService matchService = new MatchService(fakeRepository);
-            
+
             string myEmail = "emre@example.com";
             string strangerEmail = "stranger@example.com";
 
@@ -155,7 +160,6 @@ namespace ObjectChess.Tests
         public void GetAllMatches_ShouldReturnEverything()
         {
             FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
 
             fakeRepository.AddMatch("player1@example.com", "player2@example.com", "player1@example.com", DateTime.Now);
             fakeRepository.AddMatch("player3@example.com", "player4@example.com", "player4@example.com", DateTime.Now);

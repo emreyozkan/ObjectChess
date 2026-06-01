@@ -9,8 +9,7 @@ namespace ObjectChess.Business.Interfaces
         int GetTotalMatchCount(string playerName);
         List<MatchModel> GetPagedMatches(string playerName, int page, int pageSize);
         List<MatchModel> GetAllMatches();
-        void AddMatch(string whitePlayer, string blackPlayer, string winner, DateTime matchDate);
-        void AddMatchWithMoves(MatchModel model, List<string> rawMoves);
+        void AddMatch(MatchModel model, string rawMovesText, string currentUserName);
         void DeleteMatch(int gameId);
     }
 }

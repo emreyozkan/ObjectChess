@@ -2,11 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using MySql.Data.MySqlClient;
-using ObjectChess.Business.Models; 
+using ObjectChess.Business.Models;
 using ObjectChess.Business.Interfaces;
 
 namespace ObjectChess.Data.Repositories
 {
+    // This class is responsible for all database operations about matches
     public class MatchRepository : IMatchRepository
     {
         private readonly string _connectionString;
@@ -18,266 +19,229 @@ namespace ObjectChess.Data.Repositories
 
         public int GetTotalMatchCount(string playerName)
         {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(_connectionString))
-                {
-                    connection.Open();
-                    string query = @"
-                        SELECT COUNT(*) 
-                        FROM Games g
-                        JOIN Players White ON g.WhitePlayerID = White.PlayerID
-                        JOIN Players Black ON g.BlackPlayerID = Black.PlayerID
-                        WHERE White.FullName = @PlayerName OR Black.FullName = @PlayerName;";
+            using MySqlConnection connection = new MySqlConnection(_connectionString);
+            connection.Open();
 
-                    using (MySqlCommand command = new MySqlCommand(query, connection))
-                    {
-                        command.Parameters.AddWithValue("@PlayerName", playerName);
-                        return Convert.ToInt32(command.ExecuteScalar());
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Database error while counting matches.", ex);
-            }
+            // Count all games where player is either white or black
+            string query = @"SELECT COUNT(*) FROM Games g 
+                             JOIN Players w ON g.WhitePlayerID = w.PlayerID 
+                             JOIN Players b ON g.BlackPlayerID = b.PlayerID 
+                             WHERE w.FullName = @Name OR b.FullName = @Name;";
+
+            using MySqlCommand command = new MySqlCommand(query, connection);
+            command.Parameters.AddWithValue("@Name", playerName);
+
+            object result = command.ExecuteScalar();
+
+            // If no result, return 0 to avoid errors
+            if (result == null || result == DBNull.Value)
+                return 0;
+
+            return Convert.ToInt32(result);
         }
 
         public List<MatchModel> GetPagedMatches(string playerName, int page, int pageSize)
         {
-            List<MatchModel> pagedMatches = new List<MatchModel>();
-            int offset = (page - 1) * pageSize;
+            List<MatchModel> matches = new List<MatchModel>();
+
+            using MySqlConnection connection = new MySqlConnection(_connectionString);
+            connection.Open();
+
+            // Get matches for a player with pagination
+            string query = @"SELECT g.GameID, w.FullName AS WhitePlayer, b.FullName AS BlackPlayer, 
+                                    win.FullName AS Winner, g.MatchDate 
+                             FROM Games g
+                             JOIN Players w ON g.WhitePlayerID = w.PlayerID
+                             JOIN Players b ON g.BlackPlayerID = b.PlayerID
+                             LEFT JOIN Players win ON g.WinnerID = win.PlayerID
+                             WHERE w.FullName = @Name OR b.FullName = @Name
+                             ORDER BY g.MatchDate DESC 
+                             LIMIT @Limit OFFSET @Offset;";
+
+            using (MySqlCommand command = new MySqlCommand(query, connection))
+            {
+                command.Parameters.AddWithValue("@Name", playerName);
+                command.Parameters.AddWithValue("@Limit", pageSize);
+                command.Parameters.AddWithValue("@Offset", (page - 1) * pageSize);
+
+                using MySqlDataReader reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    MatchModel match = new MatchModel
+                    {
+                        GameID = reader.GetInt32("GameID"),
+
+                        // Handle null database values safely
+                        WhitePlayer = reader.IsDBNull(reader.GetOrdinal("WhitePlayer")) ? "" : reader.GetString("WhitePlayer"),
+                        BlackPlayer = reader.IsDBNull(reader.GetOrdinal("BlackPlayer")) ? "" : reader.GetString("BlackPlayer"),
+
+                        // If no winner, it is a draw
+                        Winner = reader.IsDBNull(reader.GetOrdinal("Winner")) ? "Draw" : reader.GetString("Winner"),
+
+                        MatchDate = reader.GetDateTime("MatchDate"),
+
+                        // Moves are loaded in a separate query
+                        Moves = new List<MoveModel>()
+                    };
+
+                    matches.Add(match);
+                }
+            }
+
+            // IMPORTANT:
+            // We load moves separately for each match (this can be slow for big data)
+            foreach (MatchModel match in matches)
+            {
+                match.Moves = GetMovesByGameId(match.GameID, connection);
+            }
+
+            return matches;
+        }
+
+        private List<MoveModel> GetMovesByGameId(int gameId, MySqlConnection connection)
+        {
+            List<MoveModel> moves = new List<MoveModel>();
+
+            // Get all moves for a specific game
+            string query = @"SELECT MoveNumber, MoveText 
+                             FROM Moves 
+                             WHERE GameID = @GameID 
+                             ORDER BY MoveNumber;";
+
+            using MySqlCommand cmd = new MySqlCommand(query, connection);
+            cmd.Parameters.AddWithValue("@GameID", gameId);
+
+            using MySqlDataReader reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                MoveModel move = new MoveModel
+                {
+                    // If null, default to 0
+                    MoveNumber = reader.IsDBNull(reader.GetOrdinal("MoveNumber"))
+                        ? 0
+                        : reader.GetInt32("MoveNumber"),
+
+                    // If null, use empty string
+                    MoveText = reader.IsDBNull(reader.GetOrdinal("MoveText"))
+                        ? ""
+                        : reader.GetString("MoveText")
+                };
+
+                moves.Add(move);
+            }
+
+            return moves;
+        }
+
+        public void AddMatch(MatchModel model)
+        {
+            model.Moves ??= new List<MoveModel>();
+
+            using MySqlConnection connection = new MySqlConnection(_connectionString);
+            connection.Open();
+
+            using MySqlTransaction transaction = connection.BeginTransaction();
 
             try
             {
-                using (MySqlConnection connection = new MySqlConnection(_connectionString))
+                // Make sure both players exist before inserting game
+                int whiteId = EnsurePlayerExists(connection, transaction, model.WhitePlayer);
+                int blackId = EnsurePlayerExists(connection, transaction, model.BlackPlayer);
+
+                // Winner can be null (draw case)
+                int? winnerId = string.IsNullOrWhiteSpace(model.Winner)
+                    ? null
+                    : (int?)EnsurePlayerExists(connection, transaction, model.Winner);
+
+                string query = @"INSERT INTO Games 
+                                (WhitePlayerID, BlackPlayerID, WinnerID, MatchDate) 
+                                VALUES (@W, @B, @Win, @Date); 
+                                SELECT LAST_INSERT_ID();";
+
+                using MySqlCommand cmd = new MySqlCommand(query, connection, transaction);
+                cmd.Parameters.AddWithValue("@W", whiteId);
+                cmd.Parameters.AddWithValue("@B", blackId);
+                cmd.Parameters.AddWithValue("@Win", (object?)winnerId ?? DBNull.Value);
+                cmd.Parameters.AddWithValue("@Date", model.MatchDate);
+
+                object result = cmd.ExecuteScalar();
+
+                if (result == null || result == DBNull.Value)
+                    throw new Exception("Failed to insert game.");
+
+                int gameId = Convert.ToInt32(result);
+
+                // Insert all moves of this match
+                foreach (MoveModel move in model.Moves)
                 {
-                    connection.Open();
+                    if (move == null) continue;
 
-                    string matchQuery = @"
-                        SELECT 
-                            g.GameID,
-                            White.FullName AS WhitePlayer, 
-                            Black.FullName AS BlackPlayer, 
-                            Winner.FullName AS Winner, 
-                            g.MatchDate 
-                        FROM Games g
-                        JOIN Players White ON g.WhitePlayerID = White.PlayerID
-                        JOIN Players Black ON g.BlackPlayerID = Black.PlayerID
-                        LEFT JOIN Players Winner ON g.WinnerID = Winner.PlayerID
-                        WHERE White.FullName = @PlayerName OR Black.FullName = @PlayerName
-                        ORDER BY g.MatchDate DESC
-                        LIMIT @Limit OFFSET @Offset;";
+                    string moveQuery = @"INSERT INTO Moves (GameID, MoveNumber, MoveText) 
+                                         VALUES (@GID, @Num, @Text);";
 
-                    using (MySqlCommand command = new MySqlCommand(matchQuery, connection))
-                    {
-                        command.Parameters.AddWithValue("@PlayerName", playerName);
-                        command.Parameters.AddWithValue("@Limit", pageSize);
-                        command.Parameters.AddWithValue("@Offset", offset);
+                    using MySqlCommand moveCmd = new MySqlCommand(moveQuery, connection, transaction);
+                    moveCmd.Parameters.AddWithValue("@GID", gameId);
+                    moveCmd.Parameters.AddWithValue("@Num", move.MoveNumber);
+                    moveCmd.Parameters.AddWithValue("@Text", move.MoveText ?? "");
 
-                        using (MySqlDataReader reader = command.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                MatchModel match = new MatchModel
-                                {
-                                    GameID = Convert.ToInt32(reader["GameID"]),
-                                    WhitePlayer = reader["WhitePlayer"]?.ToString() ?? "",
-                                    BlackPlayer = reader["BlackPlayer"]?.ToString() ?? "",
-                                    MatchDate = Convert.ToDateTime(reader["MatchDate"]),
-                                    Winner = reader["Winner"] != DBNull.Value ? reader["Winner"]?.ToString() ?? "Draw" : "Draw",
-                                    Moves = new List<MoveModel>()
-                                };
-                                pagedMatches.Add(match);
-                            }
-                        }
-                    }
-
-                    if (pagedMatches.Any())
-                    {
-                        List<int> gameIds = pagedMatches.Select(m => m.GameID).ToList();
-                        string inClause = string.Join(",", gameIds);
-
-                        string moveQuery = $"SELECT MoveID, GameID, MoveNumber, MoveText FROM Moves WHERE GameID IN ({inClause}) ORDER BY MoveNumber ASC;";
-
-                        using (MySqlCommand moveCommand = new MySqlCommand(moveQuery, connection))
-                        {
-                            using (MySqlDataReader moveReader = moveCommand.ExecuteReader())
-                            {
-                                while (moveReader.Read())
-                                {
-                                    int gameId = Convert.ToInt32(moveReader["GameID"]);
-                                    MatchModel? parentMatch = pagedMatches.FirstOrDefault(m => m.GameID == gameId);
-
-                                    if (parentMatch != null)
-                                    {
-                                        parentMatch.Moves.Add(new MoveModel
-                                        {
-                                            MoveID = Convert.ToInt32(moveReader["MoveID"]),
-                                            GameID = gameId,
-                                            MoveNumber = Convert.ToInt32(moveReader["MoveNumber"]),
-                                            MoveText = moveReader["MoveText"]?.ToString() ?? ""
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    moveCmd.ExecuteNonQuery();
                 }
+
+                // Save everything if no error
+                transaction.Commit();
             }
-            catch (Exception ex)
+            catch
             {
-                throw new Exception("Database error while retrieving paged matches and moves.", ex);
-            }
-
-            return pagedMatches;
-        }
-
-        public List<MatchModel> GetAllMatches()
-        {
-            return GetPagedMatches("", 1, int.MaxValue); 
-        }
-
-        private int GetOrCreatePlayer(MySqlConnection connection, MySqlTransaction transaction, string playerName)
-        {
-            string checkQuery = "SELECT PlayerID FROM Players WHERE FullName = @FullName;";
-            using (MySqlCommand checkCmd = new MySqlCommand(checkQuery, connection, transaction))
-            {
-                checkCmd.Parameters.AddWithValue("@FullName", playerName);
-                object? result = checkCmd.ExecuteScalar();
-                
-                if (result != null)
-                {
-                    return Convert.ToInt32(result);
-                }
-            }
-
-            string insertQuery = "INSERT INTO Players (FullName) VALUES (@FullName); SELECT LAST_INSERT_ID();";
-            using (MySqlCommand insertCmd = new MySqlCommand(insertQuery, connection, transaction))
-            {
-                insertCmd.Parameters.AddWithValue("@FullName", playerName);
-                object? newId = insertCmd.ExecuteScalar();
-                return newId != null ? Convert.ToInt32(newId) : 0;
+                // If something fails, undo everything
+                transaction.Rollback();
+                throw;
             }
         }
 
-        public void AddMatch(string whitePlayer, string blackPlayer, string winner, DateTime matchDate)
+        private int EnsurePlayerExists(MySqlConnection conn, MySqlTransaction trans, string name)
         {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(_connectionString))
-                {
-                    connection.Open();
-                    using (MySqlTransaction transaction = connection.BeginTransaction())
-                    {
-                        try
-                        {
-                            int whiteId = GetOrCreatePlayer(connection, transaction, whitePlayer);
-                            int blackId = GetOrCreatePlayer(connection, transaction, blackPlayer);
-                            int? winnerId = !string.IsNullOrEmpty(winner) && winner != "Draw" ? GetOrCreatePlayer(connection, transaction, winner) : null;
-                            
-                            string query = "INSERT INTO Games (WhitePlayerID, BlackPlayerID, WinnerID, MatchDate) VALUES (@WhiteID, @BlackID, @WinnerID, @Date);";
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException("Player name cannot be empty.");
 
-                            using (MySqlCommand command = new MySqlCommand(query, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@WhiteID", whiteId);
-                                command.Parameters.AddWithValue("@BlackID", blackId);
-                                command.Parameters.AddWithValue("@WinnerID", (object?)winnerId ?? DBNull.Value);
-                                command.Parameters.AddWithValue("@Date", matchDate);
-                                command.ExecuteNonQuery();
-                            }
-                            transaction.Commit();
-                        }
-                        catch
-                        {
-                            transaction.Rollback();
-                            throw;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Database error while adding a match.", ex);
-            }
-        }
+            // Check if player already exists
+            string query = "SELECT PlayerID FROM Players WHERE FullName = @Name;";
+            using MySqlCommand cmd = new MySqlCommand(query, conn, trans);
+            cmd.Parameters.AddWithValue("@Name", name);
 
-        public void AddMatchWithMoves(MatchModel model)
-        {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(_connectionString))
-                {
-                    connection.Open();
-                    using (MySqlTransaction transaction = connection.BeginTransaction())
-                    {
-                        try
-                        {
-                            int whiteId = GetOrCreatePlayer(connection, transaction, model.WhitePlayer);
-                            int blackId = GetOrCreatePlayer(connection, transaction, model.BlackPlayer);
-                            int? winnerId = !string.IsNullOrEmpty(model.Winner) && model.Winner != "Draw" ? GetOrCreatePlayer(connection, transaction, model.Winner) : null;
-                            
-                            string matchQuery = "INSERT INTO Games (WhitePlayerID, BlackPlayerID, WinnerID, MatchDate) VALUES (@WhiteID, @BlackID, @WinnerID, @Date); SELECT LAST_INSERT_ID();";
+            object result = cmd.ExecuteScalar();
 
-                            int insertedGameId = 0;
-                            using (MySqlCommand command = new MySqlCommand(matchQuery, connection, transaction))
-                            {
-                                command.Parameters.AddWithValue("@WhiteID", whiteId);
-                                command.Parameters.AddWithValue("@BlackID", blackId);
-                                command.Parameters.AddWithValue("@WinnerID", (object?)winnerId ?? DBNull.Value);
-                                command.Parameters.AddWithValue("@Date", model.MatchDate);
-                                insertedGameId = Convert.ToInt32(command.ExecuteScalar());
-                            }
+            if (result != null && result != DBNull.Value)
+                return Convert.ToInt32(result);
 
-                            if (model.Moves != null && model.Moves.Count > 0)
-                            {
-                                string moveQuery = "INSERT INTO Moves (GameID, MoveNumber, MoveText) VALUES (@GameID, @MoveNumber, @MoveText);";
-                                foreach (MoveModel move in model.Moves)
-                                {
-                                    using (MySqlCommand moveCommand = new MySqlCommand(moveQuery, connection, transaction))
-                                    {
-                                        moveCommand.Parameters.AddWithValue("@GameID", insertedGameId);
-                                        moveCommand.Parameters.AddWithValue("@MoveNumber", move.MoveNumber);
-                                        moveCommand.Parameters.AddWithValue("@MoveText", move.MoveText);
-                                        moveCommand.ExecuteNonQuery();
-                                    }
-                                }
-                            }
-                            transaction.Commit();
-                        }
-                        catch
-                        {
-                            transaction.Rollback();
-                            throw;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Database error while adding a match with moves.", ex);
-            }
+            // If not found, create new player
+            string insert = "INSERT INTO Players (FullName) VALUES (@Name); SELECT LAST_INSERT_ID();";
+            using MySqlCommand insCmd = new MySqlCommand(insert, conn, trans);
+            insCmd.Parameters.AddWithValue("@Name", name);
+
+            object insertResult = insCmd.ExecuteScalar();
+
+            if (insertResult == null || insertResult == DBNull.Value)
+                throw new Exception("Failed to insert player.");
+
+            return Convert.ToInt32(insertResult);
         }
 
         public void DeleteMatch(int gameId)
         {
-            try
-            {
-                using (MySqlConnection connection = new MySqlConnection(_connectionString))
-                {
-                    connection.Open();
-                    string query = "DELETE FROM Games WHERE GameID = @GameID;";
-                    using (MySqlCommand command = new MySqlCommand(query, connection))
-                    {
-                        command.Parameters.AddWithValue("@GameID", gameId);
-                        command.ExecuteNonQuery();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Database error while deleting the match.", ex);
-            }
+            using MySqlConnection connection = new MySqlConnection(_connectionString);
+            connection.Open();
+
+            // Delete match by its ID
+            using MySqlCommand command = new MySqlCommand("DELETE FROM Games WHERE GameID = @ID;", connection);
+            command.Parameters.AddWithValue("@ID", gameId);
+
+            command.ExecuteNonQuery();
+        }
+
+        public List<MatchModel> GetAllMatches()
+        {
+            // Just reuse pagination method to get everything
+            return GetPagedMatches("", 1, int.MaxValue);
         }
     }
 }

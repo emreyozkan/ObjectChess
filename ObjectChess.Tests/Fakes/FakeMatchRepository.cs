@@ -24,7 +24,7 @@ namespace ObjectChess.Tests.Fakes
                 .ToList();
         }
 
-        public void AddMatchWithMoves(MatchModel match)
+        public void AddMatch(MatchModel match)
         {
             _matches.Add(match);
         }

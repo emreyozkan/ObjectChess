@@ -5,31 +5,32 @@
     Layout = "_Layout";
 }
 
-<div class="auth-container">
-    <div class="auth-card">
-        <h2 class="auth-title">Welcome Back</h2>
-        <p class="auth-subtitle">Sign in to ObjectChess</p>
+<div class="auth-container d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    
+    <div class="auth-card p-4 rounded shadow-lg" style="max-width: 400px; width: 100%; background-color: #222; border: 1px solid #333;">
+        <h2 class="auth-title text-center text-white mb-1">Welcome Back</h2>
+        <p class="auth-subtitle text-center mb-4" style="color: #aaa;">Sign in to ObjectChess</p>
 
         <form asp-action="Login" method="post">
-            <div asp-validation-summary="ModelOnly" class="error-summary"></div>
+            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
 
-            <div class="form-group">
-                <label asp-for="Email">Email Address</label>
-                <input asp-for="Email" class="form-control" placeholder="Enter your email" required />
-                <span asp-validation-for="Email" class="error-text"></span>
+            <div class="form-group mb-3">
+                <label asp-for="Email" class="text-light mb-1">Email Address</label>
+                <input asp-for="Email" class="form-control" style="background-color: #1a1a1a; color: white; border: 1px solid #444;" placeholder="Enter your email" required />
+                <span asp-validation-for="Email" class="text-danger"></span>
             </div>
 
-            <div class="form-group">
-                <label asp-for="Password">Password</label>
-                <input asp-for="Password" class="form-control" placeholder="Enter your password" required />
-                <span asp-validation-for="Password" class="error-text"></span>
+            <div class="form-group mb-3">
+                <label asp-for="Password" class="text-light mb-1">Password</label>
+                <input asp-for="Password" class="form-control" style="background-color: #1a1a1a; color: white; border: 1px solid #444;" placeholder="Enter your password" required />
+                <span asp-validation-for="Password" class="text-danger"></span>
             </div>
 
-            <button type="submit" class="btn auth-btn">Login</button>
+            <button type="submit" class="btn w-100 mt-4 mb-2" style="background-color: #8cc63f; color: #222; font-weight: bold; padding: 12px;">Login</button>
         </form>
 
-        <div class="auth-footer">
-            Don't have an account? <a asp-action="Register" class="auth-link">Register here</a>
+        <div class="auth-footer text-center mt-3" style="color: #aaa;">
+            Don't have an account? <a asp-action="Register" class="auth-link" style="color: #8cc63f; text-decoration: none;">Register here</a>
         </div>
     </div>
 </div>
