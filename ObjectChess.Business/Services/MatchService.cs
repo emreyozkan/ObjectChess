@@ -1,129 +1,112 @@
-using System;
-using System.Collections.Generic;
-using System.Text.RegularExpressions;
-using ObjectChess.Business.Models;
 using ObjectChess.Business.Interfaces;
+using ObjectChess.Business.Models;
 
-namespace ObjectChess.Business.Services
+namespace ObjectChess.Business.Services;
+
+public class MatchService(IMatchRepository matchRepository, IMoveParser moveParser) : IMatchService
 {
-    public class MatchService : IMatchService
+    private const string MeKeyword = "Me";
+    private const string DrawKeyword = "Draw";
+
+    public int GetTotalMatchCount(int userId)
+        => matchRepository.GetTotalMatchCount(userId);
+
+    public List<MatchModel> GetPagedMatches(int userId, int page, int pageSize)
     {
-        private readonly IMatchRepository _repo;
-
-        // Constructor: repository is injected here (Dependency Injection)
-        public MatchService(IMatchRepository repo) => _repo = repo;
-
-        // Get total matches of a player (by name, not ID yet)
-        public int GetTotalMatchCount(string playerName) 
-            => _repo.GetTotalMatchCount(playerName);
-
-        // Get matches with pagination (pN = page number, p = page, s = size)
-        public List<MatchModel> GetPagedMatches(string pN, int p, int s) 
-            => _repo.GetPagedMatches(pN, p, s);
-
-        // Get all matches (not recommended for big data)
-        public List<MatchModel> GetAllMatches() 
-            => _repo.GetAllMatches();
-
-        // Delete a match by game ID
-        public void DeleteMatch(int gameId) 
-            => _repo.DeleteMatch(gameId);
-
-        // Add a new match with validation + move parsing
-        public void AddMatch(MatchModel model, string rawMoves, string currentName)
+        // Never let the page number go below one
+        if (page < 1)
         {
-            rawMoves = rawMoves ?? ""; // avoid null crash
-
-            // Convert "Me" keyword into actual player name
-            NormalizePlayerNames(model, currentName);
-
-            // Check if match data is logically valid
-            ValidateMatchRules(model);
-
-            // Convert raw move text into structured MoveModel list
-            ProcessMoves(model, rawMoves);
-
-            // Save final match into database
-            _repo.AddMatch(model);
+            page = 1;
         }
 
-        // Replace "Me" with actual current player name
-        private void NormalizePlayerNames(MatchModel m, string currentName)
+        // Fall back to a default size if a bad page size comes in
+        if (pageSize < 1)
         {
-            if (m.WhitePlayer.Equals("Me", StringComparison.OrdinalIgnoreCase))
-                m.WhitePlayer = currentName;
-
-            if (m.BlackPlayer.Equals("Me", StringComparison.OrdinalIgnoreCase))
-                m.BlackPlayer = currentName;
-
-            if (m.Winner != null && m.Winner.Equals("Me", StringComparison.OrdinalIgnoreCase))
-                m.Winner = currentName;
+            pageSize = 10;
         }
 
-        // Validate match rules (basic game logic checks)
-        private void ValidateMatchRules(MatchModel m)
+        return matchRepository.GetPagedMatches(userId, page, pageSize);
+    }
+
+    public MatchModel? GetMatch(int gameId, int userId)
+        => matchRepository.GetMatch(gameId, userId);
+
+    public void AddMatch(MatchModel match, string rawMoves, string currentUserFullName)
+    {
+        PrepareMatch(match, rawMoves, currentUserFullName);
+        matchRepository.AddMatch(match);
+    }
+
+    public void UpdateMatch(MatchModel match, string rawMoves, string currentUserFullName)
+    {
+        PrepareMatch(match, rawMoves, currentUserFullName);
+        matchRepository.UpdateMatch(match);
+    }
+
+    public void DeleteMatch(int gameId, int userId)
+        => matchRepository.DeleteMatch(gameId, userId);
+
+    // Shared steps used by both adding and editing a match
+    // This way the rules stay the same in both places
+    private void PrepareMatch(MatchModel match, string rawMoves, string currentUserFullName)
+    {
+        NormalizePlayerNames(match, currentUserFullName);
+        ValidateMatchRules(match);
+        match.Moves = moveParser.Parse(rawMoves ?? string.Empty);
+    }
+
+    private static void NormalizePlayerNames(MatchModel match, string currentUserFullName)
+    {
+        match.WhitePlayer = ResolveName(match.WhitePlayer, currentUserFullName);
+        match.BlackPlayer = ResolveName(match.BlackPlayer, currentUserFullName);
+
+        if (match.Winner is not null)
         {
-            // same player cannot play against himself
-            if (m.WhitePlayer.Equals(m.BlackPlayer, StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException("Players cannot be the same.");
+            match.Winner = ResolveName(match.Winner, currentUserFullName);
+        }
+    }
 
-            // check if game is draw
-            bool isDraw = string.IsNullOrEmpty(m.Winner) 
-                || m.Winner.Equals("Draw", StringComparison.OrdinalIgnoreCase);
+    private static string ResolveName(string value, string currentUserFullName)
+    {
+        // Trim off any extra spaces around the name
+        string trimmed = (value ?? string.Empty).Trim();
+        // Little shortcut where if someone types "Me" we swap it for their own account name
+        return trimmed.Equals(MeKeyword, StringComparison.OrdinalIgnoreCase)
+            ? currentUserFullName
+            : trimmed;
+    }
 
-            // winner must be one of white or black player, cannot be a third one
-            if (!isDraw &&
-                !m.Winner.Equals(m.WhitePlayer, StringComparison.OrdinalIgnoreCase) &&
-                !m.Winner.Equals(m.BlackPlayer, StringComparison.OrdinalIgnoreCase))
-                throw new ArgumentException("Invalid winner.");
-
-            // if draw, store winner as null in DB
-            if (isDraw)
-                m.Winner = null;
+    private static void ValidateMatchRules(MatchModel match)
+    {
+        // Both players must actually have a name
+        if (string.IsNullOrWhiteSpace(match.WhitePlayer) ||
+            string.IsNullOrWhiteSpace(match.BlackPlayer))
+        {
+            throw new ArgumentException("Both players are required.");
         }
 
-        // Convert raw chess moves string into structured list
-        private void ProcessMoves(MatchModel m, string raw)
+        // Can not have the same person playing both sides
+        if (match.WhitePlayer.Equals(match.BlackPlayer, StringComparison.OrdinalIgnoreCase))
         {
-            m.Moves = new List<MoveModel>();
+            throw new ArgumentException("Players cannot be the same.");
+        }
 
-            // if no moves, just return empty list
-            if (string.IsNullOrWhiteSpace(raw))
-                return;
+        // A game is a draw if no winner was given or they picked "Draw"
+        bool isDraw = string.IsNullOrWhiteSpace(match.Winner) ||
+                      match.Winner.Equals(DrawKeyword, StringComparison.OrdinalIgnoreCase);
 
-            // clean line breaks and split by spaces
-            string[] tokens = raw
-                .Replace("\r\n", " ")
-                .Replace("\n", " ")
-                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (isDraw)
+        {
+            // Store a draw as null in the db instead of the word "Draw"
+            match.Winner = null;
+            return;
+        }
 
-            int moveNum = 1;   // full move number (1,2,3...)
-            int halfMoves = 0; // counts white + black moves
-
-            // basic chess move validation regex
-            string pattern = @"^(O-O(-O)?|[a-h][1-8]|[a-h]x[a-h][1-8]|[KQRBN][a-h1-8x]?[a-h][1-8](=[QRBN])?[+#]?)$";
-
-            foreach (var token in tokens)
-            {
-                // skip move numbers like "1." or "2."
-                if (token.EndsWith(".") || int.TryParse(token, out _))
-                    continue;
-
-                // validate move format
-                if (!Regex.IsMatch(token, pattern))
-                    throw new ArgumentException($"Invalid move: {token}");
-
-                // add move to list
-                m.Moves.Add(new MoveModel
-                {
-                    MoveNumber = moveNum,
-                    MoveText = token
-                });
-
-                // after black move, increase full move number
-                if (++halfMoves % 2 == 0)
-                    moveNum++;
-            }
+        // If it is not a draw then the winner has to be one of the two players
+        if (!match.Winner!.Equals(match.WhitePlayer, StringComparison.OrdinalIgnoreCase) &&
+            !match.Winner.Equals(match.BlackPlayer, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("Winner must be one of the two players or 'Draw'.");
         }
     }
 }

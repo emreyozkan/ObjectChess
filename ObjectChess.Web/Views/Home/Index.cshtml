@@ -10,8 +10,8 @@
         {
             for (int col = 0; col < 8; col++)
             {
-                var isLight = (row + col) % 2 == 0;
-                var squareClass = isLight ? "light" : "dark";
+                bool isLight = (row + col) % 2 == 0;
+                string squareClass = isLight ? "light" : "dark";
 
                 <div class="square @squareClass" data-row="@row" data-col="@col">
                 </div>

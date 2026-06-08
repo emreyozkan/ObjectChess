@@ -1,142 +1,166 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using ObjectChess.Web.ViewModels;
-using ObjectChess.Business.Models;
+using Microsoft.AspNetCore.Mvc;
 using ObjectChess.Business.Interfaces;
+using ObjectChess.Business.Models;
+using ObjectChess.Web.ViewModels;
 
-namespace ObjectChess.Web.Controllers
+namespace ObjectChess.Web.Controllers;
+
+[Authorize]
+public class MatchController(IMatchService matchService) : Controller
 {
-    // Only logged-in users can access this controller
-    [Authorize]
-    public class MatchController : Controller
-    {
-        private readonly IMatchService _matchService;
+    private const int PageSize = 10;
 
-        // Constructor: service is injected (Dependency Injection)
-        public MatchController(IMatchService matchService)
+    // Who is logged in right now
+    // We read it from the login cookie claims instead of trusting the form
+    private int CurrentUserId => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+    private string CurrentUserFullName => User.Identity?.Name ?? string.Empty;
+
+    [HttpGet]
+    public IActionResult MatchHistory(int page = 1)
+    {
+        return View(BuildPageViewModel(page));
+    }
+
+    [HttpPost]
+    public IActionResult AddMatch(MatchHistoryPageViewModel pageModel)
+    {
+        AddMatchViewModel input = pageModel.NewMatch;
+
+        // Build a match object from the form data
+        MatchModel match = new()
         {
-            _matchService = matchService;
+            // Stamp the match with the logged in user so it belongs to them
+            UserId = CurrentUserId,
+            WhitePlayer = input.WhitePlayer ?? string.Empty,
+            BlackPlayer = input.BlackPlayer ?? string.Empty,
+            Winner = input.Winner,
+            MatchDate = input.MatchDate
+        };
+
+        try
+        {
+            matchService.AddMatch(match, input.RawMovesText ?? string.Empty, CurrentUserFullName);
+        }
+        catch (ArgumentException ex)
+        {
+            // A bad move or bad input throws so we show that message on the form instead of crashing
+            ModelState.AddModelError("NewMatch.RawMovesText", ex.Message);
+
+            MatchHistoryPageViewModel errorModel = BuildPageViewModel(1);
+            errorModel.NewMatch = input;
+            return View("MatchHistory", errorModel);
         }
 
-        // GET: Show match history page with pagination
-        [HttpGet]
-        public IActionResult MatchHistory(int page = 1)
+        return RedirectToAction("MatchHistory");
+    }
+
+    [HttpGet]
+    public IActionResult EditMatch(int id)
+    {
+        // Pass CurrentUserId so people can not edit a match that is not theirs
+        // Even if they type a random id into the url
+        MatchModel? match = matchService.GetMatch(id, CurrentUserId);
+
+        // Either the match is missing or it is not theirs so say not found
+        if (match is null)
         {
-            // Get current logged-in user name from identity system
-            string currentFullName = User.Identity?.Name ?? "";
+            return NotFound();
+        }
 
-            // Build full view model for the page
-            MatchHistoryPageViewModel model = GetMatchHistoryViewModel(currentFullName, page);
+        EditMatchViewModel model = new()
+        {
+            GameId = match.GameId,
+            WhitePlayer = match.WhitePlayer,
+            BlackPlayer = match.BlackPlayer,
+            Winner = match.Winner ?? "Draw",
+            MatchDate = match.MatchDate,
+            RawMovesText = string.Join(" ", match.Moves.Select(move => move.MoveText))
+        };
 
+        return View(model);
+    }
+
+    [HttpPost]
+    public IActionResult EditMatch(EditMatchViewModel model)
+    {
+        // If the form broke a rule then show it again with the errors
+        if (!ModelState.IsValid)
+        {
             return View(model);
         }
 
-        // POST: Add new match from form
-        [HttpPost]
-        public IActionResult AddMatch(MatchHistoryPageViewModel pageModel)
+        MatchModel match = new()
         {
-            string currentFullName = User.Identity?.Name ?? "";
+            GameId = model.GameId,
+            UserId = CurrentUserId,
+            WhitePlayer = model.WhitePlayer ?? string.Empty,
+            BlackPlayer = model.BlackPlayer ?? string.Empty,
+            Winner = model.Winner,
+            MatchDate = model.MatchDate
+        };
 
-            // Get new match data from form
-            AddMatchViewModel newMatch = pageModel.NewMatch;
-
-            string whiteValue = newMatch.WhitePlayer ?? "";
-            string blackValue = newMatch.BlackPlayer ?? "";
-            string winnerValue = newMatch.Winner ?? "";
-            string rawMoves = newMatch.RawMovesText ?? "";
-
-            // Replace "Me" keyword with current user name
-            if (whiteValue.Equals("Me", StringComparison.OrdinalIgnoreCase))
-                whiteValue = currentFullName;
-
-            if (blackValue.Equals("Me", StringComparison.OrdinalIgnoreCase))
-                blackValue = currentFullName;
-
-            if (winnerValue.Equals("Me", StringComparison.OrdinalIgnoreCase))
-                winnerValue = currentFullName;
-
-            // Create domain model object
-            MatchModel matchModel = new MatchModel
-            {
-                WhitePlayer = whiteValue,
-                BlackPlayer = blackValue,
-                Winner = winnerValue,
-                MatchDate = newMatch.MatchDate,
-
-                // Moves will be filled in service layer
-                Moves = new List<MoveModel>()
-            };
-
-            try
-            {
-                // Send data to service layer (business logic happens there)
-                _matchService.AddMatch(matchModel, rawMoves, currentFullName);
-            }
-            catch (ArgumentException ex)
-            {
-                // If validation fails, show error on UI
-                ModelState.AddModelError("NewMatch.RawMovesText", ex.Message);
-
-                // Reload page with error message
-                MatchHistoryPageViewModel errorModel = GetMatchHistoryViewModel(currentFullName, 1);
-                errorModel.NewMatch = pageModel.NewMatch;
-
-                return View("MatchHistory", errorModel);
-            }
-
-            // If success, refresh page
-            return RedirectToAction("MatchHistory");
+        try
+        {
+            matchService.UpdateMatch(match, model.RawMovesText ?? string.Empty, CurrentUserFullName);
+        }
+        catch (ArgumentException ex)
+        {
+            ModelState.AddModelError("RawMovesText", ex.Message);
+            return View(model);
         }
 
-        // POST: Delete a match
-        [HttpPost]
-        public IActionResult DeleteMatch(int gameId)
+        return RedirectToAction("MatchHistory");
+    }
+
+    [HttpPost]
+    public IActionResult DeleteMatch(int gameId)
+    {
+        // Pass CurrentUserId so you can only delete your own match
+        matchService.DeleteMatch(gameId, CurrentUserId);
+        return RedirectToAction("MatchHistory");
+    }
+
+    private MatchHistoryPageViewModel BuildPageViewModel(int page)
+    {
+        int totalMatches = matchService.GetTotalMatchCount(CurrentUserId);
+        // Work out how many pages we need and round up so leftover matches get their own page
+        int totalPages = Math.Max(1, (int)Math.Ceiling(totalMatches / (double)PageSize));
+
+        // Keep the page number inside the valid range so nobody can ask for page -5 or page 9999
+        if (page < 1)
         {
-            _matchService.DeleteMatch(gameId);
-            return RedirectToAction("MatchHistory");
+            page = 1;
         }
 
-        // Build full page view model (history + pagination + form)
-        private MatchHistoryPageViewModel GetMatchHistoryViewModel(string playerName, int page)
+        if (page > totalPages)
         {
-            int pageSize = 10;
+            page = totalPages;
+        }
 
-            // Get total number of matches for pagination
-            int totalMatches = _matchService.GetTotalMatchCount(playerName);
+        List<MatchModel> pagedMatches = matchService.GetPagedMatches(CurrentUserId, page, PageSize);
 
-            // Get only current page matches
-            List<MatchModel> pagedRawMatches = _matchService.GetPagedMatches(playerName, page, pageSize);
-
-            // Convert domain models to view models (UI layer separation)
-            List<MatchHistoryViewModel> historyList = pagedRawMatches
-                .Select(item => new MatchHistoryViewModel
-                {
-                    GameID = item.GameID,
-                    WhitePlayer = item.WhitePlayer,
-                    BlackPlayer = item.BlackPlayer,
-                    Winner = item.Winner,
-                    MatchDate = item.MatchDate,
-
-                    // Safety check in case moves is null
-                    Moves = item.Moves ?? new List<MoveModel>()
-                })
-                .ToList();
-
-            // Final page model sent to View
-            return new MatchHistoryPageViewModel
+        // Turn each match into a smaller view model that the page can show
+        List<MatchHistoryViewModel> history = pagedMatches
+            .Select(match => new MatchHistoryViewModel
             {
-                Matches = historyList,
-                CurrentPage = page,
+                GameId = match.GameId,
+                WhitePlayer = match.WhitePlayer,
+                BlackPlayer = match.BlackPlayer,
+                Winner = match.Winner ?? "Draw",
+                MatchDate = match.MatchDate,
+                Moves = match.Moves
+            })
+            .ToList();
 
-                // Calculate total pages for pagination
-                TotalPages = (int)Math.Ceiling(totalMatches / (double)pageSize),
-
-                // Empty form model for new match input
-                NewMatch = new AddMatchViewModel()
-            };
-        }
+        return new MatchHistoryPageViewModel
+        {
+            Matches = history,
+            CurrentPage = page,
+            TotalPages = totalPages,
+            NewMatch = new AddMatchViewModel()
+        };
     }
 }

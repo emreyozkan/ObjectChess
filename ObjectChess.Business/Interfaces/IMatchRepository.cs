@@ -1,15 +1,13 @@
-using System;
-using System.Collections.Generic;
 using ObjectChess.Business.Models;
 
-namespace ObjectChess.Business.Interfaces
+namespace ObjectChess.Business.Interfaces;
+
+public interface IMatchRepository
 {
-    public interface IMatchRepository
-    {
-        int GetTotalMatchCount(string playerName);
-        List<MatchModel> GetPagedMatches(string playerName, int page, int pageSize);
-        List<MatchModel> GetAllMatches();
-        void AddMatch(MatchModel model);
-        void DeleteMatch(int gameId);
-    }
+    int GetTotalMatchCount(int userId);
+    List<MatchModel> GetPagedMatches(int userId, int page, int pageSize);
+    MatchModel? GetMatch(int gameId, int userId);
+    void AddMatch(MatchModel match);
+    void UpdateMatch(MatchModel match);
+    void DeleteMatch(int gameId, int userId);
 }

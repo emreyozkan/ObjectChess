@@ -1,22 +1,33 @@
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.Mvc;
 using ObjectChess.Business.Interfaces;
+using ObjectChess.Business.Security;
 using ObjectChess.Business.Services;
 using ObjectChess.Data.Repositories;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddControllersWithViews();
+builder.Services.AddControllersWithViews(options =>
+{
+    // Turns on CSRF protection for every POST so forms can not be faked from other sites
+    options.Filters.Add(new AutoValidateAntiforgeryTokenAttribute());
+});
 
-string connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? "";
+// Read the database connection string from the config
+// Fail right away if it is missing so we do not start in a broken state
+string connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' is not configured.");
 
-builder.Services.AddScoped<IMatchRepository>(provider => new MatchRepository(connectionString));
-builder.Services.AddScoped<IMatchService, MatchService>();
-builder.Services.AddScoped<IAuthRepository>(provider => new AuthRepository(connectionString));
+// This is the one place we say when something asks for an interface give it this real class
+// This is how dependency injection works so the rest of the code only depends on interfaces
+builder.Services.AddScoped<IUserRepository>(_ => new UserRepository(connectionString));
+builder.Services.AddScoped<IMatchRepository>(_ => new MatchRepository(connectionString));
+// Singleton means one shared instance for the whole app which is fine since these hold no user state
+builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
+builder.Services.AddSingleton<IPasswordPolicy, PasswordPolicy>();
+builder.Services.AddSingleton<IMoveParser, MoveParser>();
+// Scoped means a fresh instance for each web request
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IMatchService, MatchService>();
 
 builder.Services.AddAuthentication(options =>
 {
@@ -25,24 +36,25 @@ builder.Services.AddAuthentication(options =>
 })
 .AddCookie("ObjectChessAuth", options =>
 {
+    // Name the cookie and send anyone who is not logged in to the login page
     options.Cookie.Name = "ObjectChess.Cookie";
     options.LoginPath = "/Auth/Login";
-    options.ExpireTimeSpan = System.TimeSpan.FromHours(2);
+    options.ExpireTimeSpan = TimeSpan.FromHours(2);
 });
 
 WebApplication app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 app.UseRouting();
 
+// Order matters here
+// Authentication (who are you) must run before authorization (are you allowed)
 app.UseAuthentication();
 app.UseAuthorization();
 

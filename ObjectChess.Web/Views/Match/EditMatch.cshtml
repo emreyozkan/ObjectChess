@@ -1,0 +1,44 @@
+@model ObjectChess.Web.ViewModels.EditMatchViewModel
+
+@{
+    ViewData["Title"] = "Edit Match";
+}
+
+<link rel="stylesheet" href="~/css/MatchHistory.css" asp-append-version="true" />
+
+<div class="header-container">
+    <h2 class="page-title">Edit Match</h2>
+    <a asp-action="MatchHistory" class="btn btn-secondary">Back to History</a>
+</div>
+
+<div class="form-container">
+    <form asp-action="EditMatch" method="post" class="match-form">
+        <input type="hidden" asp-for="GameId" />
+
+        <div asp-validation-summary="ModelOnly" style="color: #ff4d4d; margin-bottom: 10px;"></div>
+
+        <input type="text" asp-for="WhitePlayer" placeholder="White Player (Type 'Me' for yourself)" list="playerOptions" required />
+        <input type="text" asp-for="BlackPlayer" placeholder="Black Player (Type 'Me' for yourself)" list="playerOptions" required />
+
+        <datalist id="playerOptions">
+            <option value="Me"></option>
+        </datalist>
+
+        <input type="text" asp-for="Winner" placeholder="Winner (Type 'Me', Name, or 'Draw')" list="winnerOptions" required />
+
+        <datalist id="winnerOptions">
+            <option value="Me"></option>
+            <option value="Draw"></option>
+        </datalist>
+
+        <input type="datetime-local" asp-for="MatchDate" asp-format="{0:yyyy-MM-ddTHH:mm}" required />
+
+        <textarea asp-for="RawMovesText" placeholder="Moves (Optional) e.g., e4 e5 Nf3 Nc6" rows="3" style="width: 100%; margin-bottom: 15px; padding: 10px; background-color: #222; color: #fff; border: 1px solid #444; border-radius: 4px; resize: vertical;"></textarea>
+        <span asp-validation-for="RawMovesText" style="color: #ff4d4d; display: block; margin-bottom: 10px;"></span>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-success">Save Changes</button>
+            <a asp-action="MatchHistory" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>

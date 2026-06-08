@@ -1,94 +1,99 @@
-using System;
 using Xunit;
+using ObjectChess.Business.Models;
+using ObjectChess.Business.Security;
 using ObjectChess.Business.Services;
 using ObjectChess.Tests.Fakes;
 
-namespace ObjectChess.Tests
+namespace ObjectChess.Tests;
+
+public class AuthServiceTests
 {
-    public class AuthServiceTests
+    private const string ValidPassword = "StrongPass1!";
+
+    private static AuthService CreateService(FakeUserRepository repository)
     {
-        [Fact]
-        public void Register_ShouldSucceed_WhenEmailIsNew()
+        return new AuthService(repository, new PasswordHasher(), new PasswordPolicy());
+    }
+
+    [Fact]
+    public void Register_ShouldSucceed_WhenEmailIsNew()
+    {
+        FakeUserRepository repository = new();
+        AuthService authService = CreateService(repository);
+
+        authService.Register("Emre Yozkan", "emre@example.com", ValidPassword);
+
+        Assert.True(repository.EmailExists("emre@example.com"));
+    }
+
+    [Fact]
+    public void Register_ShouldThrow_WhenEmailAlreadyExists()
+    {
+        FakeUserRepository repository = new();
+        AuthService authService = CreateService(repository);
+        repository.CreateUser(new UserModel
         {
-            FakeAuthRepository fakeRepository = new FakeAuthRepository();
-            AuthService authService = new AuthService(fakeRepository);
-            string fullName = "Emre Yozkan";
-            string email = "emre@example.com";
-            string password = "StrongPassword123";
+            FullName = "Emre Yozkan",
+            Email = "existing@example.com",
+            PasswordHash = "hash"
+        });
 
-            authService.Register(fullName, email, password);
+        Assert.Throws<ArgumentException>(() =>
+            authService.Register("Emre Yozkan", "existing@example.com", ValidPassword));
+    }
 
-            bool isRegistered = fakeRepository.CheckIfEmailExists(email);
-            Assert.True(isRegistered);
-        }
+    [Fact]
+    public void Register_ShouldThrow_WhenInputsAreEmpty()
+    {
+        FakeUserRepository repository = new();
+        AuthService authService = CreateService(repository);
 
-        [Fact]
-        public void Register_ShouldThrowException_WhenEmailAlreadyExists()
-        {
-            FakeAuthRepository fakeRepository = new FakeAuthRepository();
-            AuthService authService = new AuthService(fakeRepository);
-            string fullName = "Emre Yozkan";
-            string email = "existing@example.com";
-            string password = "StrongPassword123";
-            fakeRepository.RegisterUser(fullName, email, "some_hashed_password");
+        Assert.Throws<ArgumentException>(() => authService.Register("", "", ""));
+    }
 
-            Action action = () => authService.Register(fullName, email, password);
+    [Fact]
+    public void Register_ShouldThrow_WhenPasswordIsTooWeak()
+    {
+        FakeUserRepository repository = new();
+        AuthService authService = CreateService(repository);
 
-            Assert.Throws<ArgumentException>(action);
-        }
+        Assert.Throws<ArgumentException>(() =>
+            authService.Register("Emre Yozkan", "emre@example.com", "weak"));
+    }
 
-        [Fact]
-        public void Login_ShouldReturnFullName_WhenCredentialsAreCorrect()
-        {
-            FakeAuthRepository fakeRepository = new FakeAuthRepository();
-            AuthService authService = new AuthService(fakeRepository);
-            string fullName = "Emre Yozkan";
-            string email = "emre@example.com";
-            string password = "StrongPassword123";
-            authService.Register(fullName, email, password);
+    [Fact]
+    public void Login_ShouldReturnUser_WhenCredentialsAreCorrect()
+    {
+        FakeUserRepository repository = new();
+        AuthService authService = CreateService(repository);
+        authService.Register("Emre Yozkan", "emre@example.com", ValidPassword);
 
-            string? resultFullName = authService.Login(email, password);
+        UserModel? user = authService.Login("emre@example.com", ValidPassword);
 
-            Assert.NotNull(resultFullName);
-            Assert.Equal(fullName, resultFullName);
-        }
+        Assert.NotNull(user);
+        Assert.Equal("Emre Yozkan", user!.FullName);
+    }
 
-        [Fact]
-        public void Login_ShouldReturnNull_WhenPasswordIsWrong()
-        {
-            FakeAuthRepository fakeRepository = new FakeAuthRepository();
-            AuthService authService = new AuthService(fakeRepository);
-            string fullName = "Emre Yozkan";
-            string email = "emre@example.com";
-            string password = "StrongPassword123";
-            string wrongPassword = "WrongPassword456";
-            authService.Register(fullName, email, password);
+    [Fact]
+    public void Login_ShouldReturnNull_WhenPasswordIsWrong()
+    {
+        FakeUserRepository repository = new();
+        AuthService authService = CreateService(repository);
+        authService.Register("Emre Yozkan", "emre@example.com", ValidPassword);
 
-            string? resultFullName = authService.Login(email, wrongPassword);
+        UserModel? user = authService.Login("emre@example.com", "WrongPass1!");
 
-            Assert.Null(resultFullName);
-        }
+        Assert.Null(user);
+    }
 
-        [Fact]
-        public void Login_ShouldReturnNull_WhenEmailDoesNotExist()
-        {
-            FakeAuthRepository fakeRepository = new FakeAuthRepository();
-            AuthService authService = new AuthService(fakeRepository);
-            
-            string? resultFullName = authService.Login("ghost@example.com", "Password123");
+    [Fact]
+    public void Login_ShouldReturnNull_WhenEmailDoesNotExist()
+    {
+        FakeUserRepository repository = new();
+        AuthService authService = CreateService(repository);
 
-            Assert.Null(resultFullName);
-        }
+        UserModel? user = authService.Login("ghost@example.com", ValidPassword);
 
-        [Fact]
-        public void Register_ShouldThrowException_WhenInputsAreEmpty()
-        {
-            FakeAuthRepository fakeRepository = new FakeAuthRepository();
-            AuthService authService = new AuthService(fakeRepository);
-
-            Action action = () => authService.Register("", "", "");
-
-            Assert.Throws<ArgumentException>(action);
-        }
+        Assert.Null(user);
     }
 }

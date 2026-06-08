@@ -1,172 +1,439 @@
-﻿using System;
-using System.Collections.Generic;
 using Xunit;
-using ObjectChess.Business.Services;
 using ObjectChess.Business.Models;
+using ObjectChess.Business.Services;
 using ObjectChess.Tests.Fakes;
 
-namespace ObjectChess.Tests
+namespace ObjectChess.Tests;
+
+public class MatchServiceTests
 {
-    public class MatchServiceTests
+    private const int UserId = 1;
+    private const int OtherUserId = 2;
+
+    private static MatchService CreateService(FakeMatchRepository repository)
     {
-        [Fact]
-        public void GetTotalMatchCount_ShouldReturnCorrectNumber()
+        return new MatchService(repository, new MoveParser());
+    }
+
+    private static MatchModel BuildMatch(int userId, string white = "Alice", string black = "Bob")
+    {
+        return new MatchModel
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
-            string playerEmail = "emre@example.com";
+            UserId = userId,
+            WhitePlayer = white,
+            BlackPlayer = black,
+            Winner = white,
+            MatchDate = DateTime.Now,
+            Moves = []
+        };
+    }
 
-            MatchModel match = new MatchModel
-            {
-                WhitePlayer = playerEmail,
-                BlackPlayer = "opponent@example.com",
-                Winner = playerEmail,
-                MatchDate = DateTime.Now,
-                Moves = new List<MoveModel>()
-            };
+    [Fact]
+    public void GetTotalMatchCount_ShouldReturnCountForUser()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        repository.AddMatch(BuildMatch(UserId));
 
-            fakeRepository.AddMatch(match);
+        Assert.Equal(1, service.GetTotalMatchCount(UserId));
+    }
 
-            int count = matchService.GetTotalMatchCount(playerEmail);
+    [Fact]
+    public void GetTotalMatchCount_ShouldReturnZero_WhenUserHasNoMatches()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
 
-            Assert.Equal(1, count);
+        Assert.Equal(0, service.GetTotalMatchCount(UserId));
+    }
+
+    [Fact]
+    public void GetPagedMatches_ShouldReturnRequestedPageSize()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        for (int i = 0; i < 5; i++)
+        {
+            repository.AddMatch(BuildMatch(UserId));
         }
 
-        [Fact]
-        public void GetPagedMatches_ShouldReturnOnlyRequestedAmount()
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 1, 2);
+
+        Assert.Equal(2, matches.Count);
+    }
+
+    [Fact]
+    public void GetPagedMatches_ShouldReturnEmpty_WhenPageBeyondData()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        repository.AddMatch(BuildMatch(UserId));
+
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 3, 5);
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void GetPagedMatches_ShouldNotReturnOtherUsersMatches()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        repository.AddMatch(BuildMatch(OtherUserId));
+
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 1, 10);
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void DeleteMatch_ShouldRemoveMatch()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(UserId);
+        match.GameId = 1;
+        repository.AddMatch(match);
+
+        service.DeleteMatch(1, UserId);
+
+        Assert.Equal(0, service.GetTotalMatchCount(UserId));
+    }
+
+    [Fact]
+    public void DeleteMatch_ShouldNotRemoveOtherUsersMatch()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(OtherUserId);
+        match.GameId = 1;
+        repository.AddMatch(match);
+
+        service.DeleteMatch(1, UserId);
+
+        Assert.Equal(1, service.GetTotalMatchCount(OtherUserId));
+    }
+
+    [Fact]
+    public void DeleteMatch_ShouldNotThrow_WhenIdIsInvalid()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+
+        Exception? exception = Record.Exception(() => service.DeleteMatch(999, UserId));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void AddMatch_ShouldPersistMatchForUser()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(UserId);
+
+        service.AddMatch(match, "e4 e5 Nf3 Nc6", "Alice");
+
+        Assert.Equal(1, service.GetTotalMatchCount(UserId));
+    }
+
+    [Fact]
+    public void AddMatch_ShouldResolveMeToCurrentUserName()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
-            string playerEmail = "emre@example.com";
+            UserId = UserId,
+            WhitePlayer = "Me",
+            BlackPlayer = "Bob",
+            Winner = "Me",
+            MatchDate = DateTime.Now
+        };
 
-            for (int i = 0; i < 5; i++)
-            {
-                MatchModel match = new MatchModel
-                {
-                    WhitePlayer = playerEmail,
-                    BlackPlayer = "opponent@example.com",
-                    Winner = playerEmail,
-                    MatchDate = DateTime.Now,
-                    Moves = new List<MoveModel>()
-                };
+        service.AddMatch(match, string.Empty, "Alice");
 
-                fakeRepository.AddMatch(match);
-            }
+        MatchModel stored = service.GetPagedMatches(UserId, 1, 10).Single();
+        Assert.Equal("Alice", stored.WhitePlayer);
+        Assert.Equal("Alice", stored.Winner);
+    }
 
-            int offset = 0;
-            int pageSize = 2;
+    [Fact]
+    public void AddMatch_ShouldStoreNullWinner_OnDraw()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
+        {
+            UserId = UserId,
+            WhitePlayer = "Alice",
+            BlackPlayer = "Bob",
+            Winner = "Draw",
+            MatchDate = DateTime.Now
+        };
 
-            List<MatchModel> matches = matchService.GetPagedMatches(playerEmail, offset, pageSize);
+        service.AddMatch(match, string.Empty, "Alice");
 
-            Assert.Equal(2, matches.Count);
+        Assert.Null(service.GetPagedMatches(UserId, 1, 10).Single().Winner);
+    }
+
+    [Fact]
+    public void AddMatch_ShouldThrow_WhenPlayersAreSame()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(UserId, white: "Bob", black: "Bob");
+
+        Assert.Throws<ArgumentException>(() => service.AddMatch(match, string.Empty, "Alice"));
+    }
+
+    [Fact]
+    public void AddMatch_ShouldThrow_WhenWinnerIsNotAPlayer()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
+        {
+            UserId = UserId,
+            WhitePlayer = "Alice",
+            BlackPlayer = "Bob",
+            Winner = "Carl",
+            MatchDate = DateTime.Now
+        };
+
+        Assert.Throws<ArgumentException>(() => service.AddMatch(match, string.Empty, "Alice"));
+    }
+
+    [Fact]
+    public void AddMatch_ShouldThrow_OnInvalidMove()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(UserId);
+
+        Assert.Throws<ArgumentException>(() => service.AddMatch(match, "e4 zzzz", "Alice"));
+    }
+
+    [Fact]
+    public void UpdateMatch_ShouldReplaceMoves()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(UserId);
+        service.AddMatch(match, "e4 e5", "Alice");
+        int gameId = service.GetPagedMatches(UserId, 1, 10).Single().GameId;
+
+        MatchModel edit = new()
+        {
+            GameId = gameId,
+            UserId = UserId,
+            WhitePlayer = "Alice",
+            BlackPlayer = "Bob",
+            Winner = "Alice",
+            MatchDate = DateTime.Now
+        };
+        service.UpdateMatch(edit, "d4 d5", "Alice");
+
+        MatchModel stored = service.GetMatch(gameId, UserId)!;
+        Assert.Equal(2, stored.Moves.Count);
+        Assert.Equal("d4", stored.Moves[0].MoveText);
+    }
+
+    [Fact]
+    public void GetPagedMatches_ShouldGiveEachMatchItsOwnMoves()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        service.AddMatch(BuildMatch(UserId, white: "A1", black: "B1"), "e4", "A1");
+        service.AddMatch(BuildMatch(UserId, white: "A2", black: "B2"), "d4 d5", "A2");
+
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 1, 10);
+
+        Assert.Single(matches.Single(m => m.WhitePlayer == "A1").Moves);
+        Assert.Equal(2, matches.Single(m => m.WhitePlayer == "A2").Moves.Count);
+    }
+
+    [Fact]
+    public void GetPagedMatches_ShouldTreatPageBelowOneAsFirstPage()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        repository.AddMatch(BuildMatch(UserId));
+        repository.AddMatch(BuildMatch(UserId));
+
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 0, 10);
+
+        Assert.Equal(2, matches.Count);
+    }
+
+    [Fact]
+    public void GetPagedMatches_ShouldFallBackToDefaultSize_WhenPageSizeBelowOne()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        for (int i = 0; i < 3; i++)
+        {
+            repository.AddMatch(BuildMatch(UserId));
         }
 
-        [Fact]
-        public void DeleteMatch_ShouldReduceTotalMatchCount()
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 1, 0);
+
+        Assert.Equal(3, matches.Count);
+    }
+
+    [Fact]
+    public void AddMatch_ShouldTrimWhitespaceAroundNames()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
-            string playerEmail = "emre@example.com";
+            UserId = UserId,
+            WhitePlayer = "  Alice  ",
+            BlackPlayer = "  Bob  ",
+            Winner = "  Alice  ",
+            MatchDate = DateTime.Now
+        };
 
-            MatchModel match = new MatchModel
-            {
-                GameID = 1,
-                WhitePlayer = playerEmail,
-                BlackPlayer = "opponent@example.com",
-                Winner = playerEmail,
-                MatchDate = DateTime.Now,
-                Moves = new List<MoveModel>()
-            };
+        service.AddMatch(match, string.Empty, "Alice");
 
-            fakeRepository.AddMatch(match);
+        MatchModel stored = service.GetPagedMatches(UserId, 1, 10).Single();
+        Assert.Equal("Alice", stored.WhitePlayer);
+        Assert.Equal("Bob", stored.BlackPlayer);
+    }
 
-            matchService.DeleteMatch(1);
-
-            int count = matchService.GetTotalMatchCount(playerEmail);
-
-            Assert.Equal(0, count);
-        }
-
-        [Fact]
-        public void GetTotalMatchCount_ShouldReturnZero_WhenPlayerIsNew()
+    [Fact]
+    public void AddMatch_ShouldThrow_WhenPlayerIsEmpty()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
+            UserId = UserId,
+            WhitePlayer = "",
+            BlackPlayer = "Bob",
+            Winner = "Bob",
+            MatchDate = DateTime.Now
+        };
 
-            int count = matchService.GetTotalMatchCount("new_player@example.com");
+        Assert.Throws<ArgumentException>(() => service.AddMatch(match, string.Empty, "Alice"));
+    }
 
-            Assert.Equal(0, count);
-        }
-
-        [Fact]
-        public void AddMatch_ShouldIncreaseTotalCount()
+    [Fact]
+    public void AddMatch_ShouldThrow_WhenPlayerIsWhitespace()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
-            string playerEmail = "emre@example.com";
+            UserId = UserId,
+            WhitePlayer = "   ",
+            BlackPlayer = "Bob",
+            Winner = "Bob",
+            MatchDate = DateTime.Now
+        };
 
-            fakeRepository.AddMatch(playerEmail, "opponent@example.com", playerEmail, DateTime.Now);
+        Assert.Throws<ArgumentException>(() => service.AddMatch(match, string.Empty, "Alice"));
+    }
 
-            int count = matchService.GetTotalMatchCount(playerEmail);
-
-            Assert.Equal(1, count);
-        }
-
-        [Fact]
-        public void GetPagedMatches_ShouldReturnEmptyList_WhenOffsetIsTooLarge()
+    [Fact]
+    public void AddMatch_ShouldStoreNullWinner_WhenWinnerIsEmpty()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
-            string playerEmail = "emre@example.com";
+            UserId = UserId,
+            WhitePlayer = "Alice",
+            BlackPlayer = "Bob",
+            Winner = "",
+            MatchDate = DateTime.Now
+        };
 
-            fakeRepository.AddMatch(playerEmail, "opponent@example.com", playerEmail, DateTime.Now);
+        service.AddMatch(match, string.Empty, "Alice");
 
-            int offset = 10;
-            int pageSize = 5;
+        Assert.Null(service.GetPagedMatches(UserId, 1, 10).Single().Winner);
+    }
 
-            List<MatchModel> matches = matchService.GetPagedMatches(playerEmail, offset, pageSize);
-
-            Assert.Empty(matches);
-        }
-
-        [Fact]
-        public void DeleteMatch_ShouldNotCrash_WhenIdIsInvalid()
+    [Fact]
+    public void AddMatch_ShouldAcceptWinner_RegardlessOfCase()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
+            UserId = UserId,
+            WhitePlayer = "Alice",
+            BlackPlayer = "Bob",
+            Winner = "alice",
+            MatchDate = DateTime.Now
+        };
 
-            Exception exception = Record.Exception(() => matchService.DeleteMatch(999));
+        Exception? exception = Record.Exception(() => service.AddMatch(match, string.Empty, "Alice"));
 
-            Assert.Null(exception);
-        }
+        Assert.Null(exception);
+        Assert.Equal(1, service.GetTotalMatchCount(UserId));
+    }
 
-        [Fact]
-        public void GetPagedMatches_ShouldNotReturnOtherPlayersMatches()
+    [Fact]
+    public void AddMatch_ShouldResolveMeForBlackPlayer_CaseInsensitive()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = new()
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
-            MatchService matchService = new MatchService(fakeRepository);
+            UserId = UserId,
+            WhitePlayer = "Bob",
+            BlackPlayer = "me",
+            Winner = "Bob",
+            MatchDate = DateTime.Now
+        };
 
-            string myEmail = "emre@example.com";
-            string strangerEmail = "stranger@example.com";
+        service.AddMatch(match, string.Empty, "Alice");
 
-            fakeRepository.AddMatch(strangerEmail, "other_opponent@example.com", strangerEmail, DateTime.Now);
+        Assert.Equal("Alice", service.GetPagedMatches(UserId, 1, 10).Single().BlackPlayer);
+    }
 
-            List<MatchModel> myMatches = matchService.GetPagedMatches(myEmail, 0, 10);
+    [Fact]
+    public void UpdateMatch_ShouldThrow_WhenMatchNotOwnedByUser()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(OtherUserId);
+        match.GameId = 1;
+        repository.AddMatch(match);
 
-            Assert.Empty(myMatches);
-        }
-
-        [Fact]
-        public void GetAllMatches_ShouldReturnEverything()
+        MatchModel edit = new()
         {
-            FakeMatchRepository fakeRepository = new FakeMatchRepository();
+            GameId = 1,
+            UserId = UserId,
+            WhitePlayer = "Alice",
+            BlackPlayer = "Bob",
+            Winner = "Alice",
+            MatchDate = DateTime.Now
+        };
 
-            fakeRepository.AddMatch("player1@example.com", "player2@example.com", "player1@example.com", DateTime.Now);
-            fakeRepository.AddMatch("player3@example.com", "player4@example.com", "player4@example.com", DateTime.Now);
+        Assert.Throws<InvalidOperationException>(() => service.UpdateMatch(edit, string.Empty, "Alice"));
+    }
 
-            List<MatchModel> allMatches = fakeRepository.GetAllMatches();
+    [Fact]
+    public void GetMatch_ShouldReturnNull_ForOtherUsersMatch()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(UserId);
+        match.GameId = 1;
+        repository.AddMatch(match);
 
-            Assert.Equal(2, allMatches.Count);
-        }
+        Assert.Null(service.GetMatch(1, OtherUserId));
+    }
+
+    [Fact]
+    public void GetMatch_ShouldReturnNull_WhenMatchDoesNotExist()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+
+        Assert.Null(service.GetMatch(999, UserId));
     }
 }

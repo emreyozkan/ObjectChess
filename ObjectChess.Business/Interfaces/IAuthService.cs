@@ -1,10 +1,9 @@
-using System;
+using ObjectChess.Business.Models;
 
-namespace ObjectChess.Business.Interfaces
+namespace ObjectChess.Business.Interfaces;
+
+public interface IAuthService
 {
-    public interface IAuthService
-    {
-        void Register(string fullName, string email, string password);
-        string? Login(string email, string password);
-    }
+    void Register(string fullName, string email, string password);
+    UserModel? Login(string email, string password);
 }

@@ -1,116 +1,100 @@
-using System;
-using System.Collections.Generic;
 using System.Security.Claims;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using ObjectChess.Business.Interfaces;
+using ObjectChess.Business.Models;
 using ObjectChess.Web.ViewModels;
 
-namespace ObjectChess.Web.Controllers
+namespace ObjectChess.Web.Controllers;
+
+public class AuthController(IAuthService authService) : Controller
 {
-    // This controller handles user authentication (register, login, logout)
-    public class AuthController : Controller
+    private const string AuthScheme = "ObjectChessAuth";
+
+    [HttpGet]
+    public IActionResult Register()
     {
-        private readonly IAuthService _authService;
+        return View();
+    }
 
-        // Dependency injection for auth service
-        public AuthController(IAuthService authService)
+    [HttpPost]
+    public IActionResult Register(RegisterViewModel model)
+    {
+        // If the form broke a rule then show it again with the errors
+        if (!ModelState.IsValid)
         {
-            _authService = authService;
+            return View(model);
         }
 
-        // Show register page
-        [HttpGet]
-        public IActionResult Register()
+        try
         {
-            return View();
+            authService.Register(model.FullName, model.Email, model.Password);
+            // Registration worked so send them to the login page
+            return RedirectToAction("Login");
+        }
+        catch (ArgumentException ex)
+        {
+            // The service threw a rule error so show that message on the form
+            ModelState.AddModelError(string.Empty, ex.Message);
+            return View(model);
+        }
+    }
+
+    [HttpGet]
+    public IActionResult Login()
+    {
+        return View();
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Login(LoginViewModel model)
+    {
+        if (!ModelState.IsValid)
+        {
+            return View(model);
         }
 
-        // Handle register form submission
-        [HttpPost]
-        public IActionResult Register(RegisterViewModel model)
+        UserModel? user = authService.Login(model.Email, model.Password);
+
+        // No matching user so show a vague error on purpose and do not say which part was wrong
+        if (user is null)
         {
-            // Validate form inputs
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            try
-            {
-                // Call service to create user
-                _authService.Register(model.FullName, model.Email, model.Password);
-
-                // After success go to login page
-                return RedirectToAction("Login");
-            }
-            catch (ArgumentException ex)
-            {
-                // Show error on email field
-                ModelState.AddModelError("Email", ex.Message);
-                return View(model);
-            }
-        }
-
-        // Show login page
-        [HttpGet]
-        public IActionResult Login()
-        {
-            return View();
-        }
-
-        // Handle login request
-        [HttpPost]
-        public async Task<IActionResult> Login(LoginViewModel model)
-        {
-            // Validate input
-            if (!ModelState.IsValid)
-            {
-                return View(model);
-            }
-
-            // Try login (returns fullName if success)
-            string? userFullName = _authService.Login(model.Email, model.Password);
-
-            if (userFullName != null)
-            {
-                // Create claims (user identity info stored in cookie)
-                List<Claim> claims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.Name, userFullName), // IMPORTANT: using FullName as identity
-                    new Claim(ClaimTypes.Email, model.Email)
-                };
-
-                // Create authentication identity
-                ClaimsIdentity identity = new ClaimsIdentity(claims, "ObjectChessAuth");
-                ClaimsPrincipal principal = new ClaimsPrincipal(identity);
-
-                // Set login session properties
-                AuthenticationProperties properties = new AuthenticationProperties
-                {
-                    IsPersistent = true,
-                    ExpiresUtc = DateTimeOffset.UtcNow.AddHours(2)
-                };
-
-                // Sign in user (create cookie)
-                await HttpContext.SignInAsync("ObjectChessAuth", principal, properties);
-
-                // Redirect to match history page
-                return RedirectToAction("MatchHistory", "Match");
-            }
-
-            // Login failed
             ModelState.AddModelError(string.Empty, "Invalid email or password.");
             return View(model);
         }
 
-        // Logout user
-        [HttpPost]
-        public async Task<IActionResult> Logout()
+        // Claims are the bits of info we want to remember about the logged in user
+        // They get saved inside the cookie
+        List<Claim> claims =
+        [
+            new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+            new Claim(ClaimTypes.Name, user.FullName),
+            new Claim(ClaimTypes.Email, user.Email)
+        ];
+
+        // Wrap the claims up into the user object that ASP.NET understands
+        ClaimsIdentity identity = new(claims, AuthScheme);
+        ClaimsPrincipal principal = new(identity);
+
+        AuthenticationProperties properties = new()
         {
-            await HttpContext.SignOutAsync("ObjectChessAuth");
-            return RedirectToAction("Login");
-        }
+            // Keep them logged in even after closing the browser
+            // But the cookie still expires after 2 hours
+            IsPersistent = true,
+            ExpiresUtc = DateTimeOffset.UtcNow.AddHours(2)
+        };
+
+        // This is what actually writes the login cookie to the browser
+        await HttpContext.SignInAsync(AuthScheme, principal, properties);
+
+        return RedirectToAction("MatchHistory", "Match");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Logout()
+    {
+        // Delete the login cookie so the user is signed out
+        await HttpContext.SignOutAsync(AuthScheme);
+        return RedirectToAction("Login");
     }
 }

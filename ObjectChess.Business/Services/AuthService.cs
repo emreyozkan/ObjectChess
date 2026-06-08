@@ -1,72 +1,59 @@
-using System;
 using ObjectChess.Business.Interfaces;
-using ObjectChess.Business.Security;
+using ObjectChess.Business.Models;
 
-namespace ObjectChess.Business.Services
+namespace ObjectChess.Business.Services;
+
+public class AuthService(
+    IUserRepository userRepository,
+    IPasswordHasher passwordHasher,
+    IPasswordPolicy passwordPolicy) : IAuthService
 {
-    // This service handles authentication logic (register + login)
-    public class AuthService : IAuthService
+    public void Register(string fullName, string email, string password)
     {
-        private readonly IAuthRepository _authRepository;
-
-        // Constructor: repository is injected using dependency injection
-        public AuthService(IAuthRepository authRepository)
+        // None of the fields are allowed to be empty
+        if (string.IsNullOrWhiteSpace(fullName) ||
+            string.IsNullOrWhiteSpace(email) ||
+            string.IsNullOrWhiteSpace(password))
         {
-            _authRepository = authRepository;
+            throw new ArgumentException("All fields are required.");
         }
 
-        // Register a new user
-        public void Register(string fullName, string email, string password)
+        // Check the password is strong enough before doing anything else
+        if (!passwordPolicy.IsValid(password, out string? policyError))
         {
-            // Validate input values
-            if (string.IsNullOrWhiteSpace(fullName) || 
-                string.IsNullOrWhiteSpace(email) || 
-                string.IsNullOrWhiteSpace(password))
-            {
-                throw new ArgumentException("Inputs cannot be empty.");
-            }
-
-            // Check if email already exists in database
-            bool emailExists = _authRepository.CheckIfEmailExists(email);
-            
-            if (emailExists)
-            {
-                throw new ArgumentException("This email is already registered.");
-            }
-
-            // Hash password before saving (never store plain password)
-            string passwordHash = PasswordHasher.HashPassword(password);
-
-            // Save user to database
-            _authRepository.RegisterUser(fullName, email, passwordHash);
+            throw new ArgumentException(policyError);
         }
 
-        // Login user and return fullName if success, otherwise null
-        public string? Login(string email, string password)
+        // Make sure nobody already registered with this email
+        if (userRepository.EmailExists(email))
         {
-            string? storedHash;
-            string? fullName;
+            throw new ArgumentException("This email is already registered.");
+        }
 
-            // Get user data from database
-            bool userFound = _authRepository.TryGetUserData(email, out storedHash, out fullName);
-            
-            // If user not found or password hash is missing
-            if (!userFound || string.IsNullOrEmpty(storedHash))
-            {
-                return null; 
-            }
+        // Build the new user and trim the spaces off the name and email
+        UserModel user = new()
+        {
+            FullName = fullName.Trim(),
+            Email = email.Trim(),
+            // Never store the real password and only keep the hashed version
+            PasswordHash = passwordHasher.Hash(password)
+        };
 
-            // Verify password using hashing function
-            bool isPasswordValid = PasswordHasher.VerifyPassword(password, storedHash);
-            
-            // If password is correct, login success
-            if (isPasswordValid)
-            {
-                return fullName;
-            }
+        userRepository.CreateUser(user);
+    }
 
-            // Otherwise login fails
+    public UserModel? Login(string email, string password)
+    {
+        // Look up the user by their email first
+        UserModel? user = userRepository.GetByEmail(email);
+
+        // No user with that email or no stored hash means login fails
+        if (user is null || string.IsNullOrEmpty(user.PasswordHash))
+        {
             return null;
         }
+
+        // Only return the user if the typed password matches the stored hash
+        return passwordHasher.Verify(password, user.PasswordHash) ? user : null;
     }
 }

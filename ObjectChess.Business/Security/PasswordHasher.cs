@@ -1,81 +1,63 @@
-using System;
 using System.Security.Cryptography;
+using ObjectChess.Business.Interfaces;
 
-namespace ObjectChess.Business.Security
+namespace ObjectChess.Business.Security;
+
+public class PasswordHasher : IPasswordHasher
 {
-    // This class is responsible for password hashing and verification
-    // It helps store passwords safely in the database (not plain text)
-    public static class PasswordHasher
+    // These numbers control how the password gets hashed
+    private const int SaltSize = 16; // how many random bytes the salt has
+    private const int KeySize = 32; // how big the final hash is
+    private const int Iterations = 100_000; // how many times we repeat the hashing
+    private static readonly HashAlgorithmName Algorithm = HashAlgorithmName.SHA256; // the hash algorithm we use
+
+    public string Hash(string password)
     {
-        // Size of random salt (used to make hashes unique)
-        private const int SaltSize = 16;
+        // Make a random salt for every password
+        // This way two people with the same password do not get the same hash
+        byte[] salt = RandomNumberGenerator.GetBytes(SaltSize);
+        // Pbkdf2 runs the hash 100k times
+        // It is slow on purpose so brute forcing becomes painful
+        byte[] key = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, Algorithm, KeySize);
 
-        // Size of final hash output
-        private const int KeySize = 32;
+        // Glue the salt and the key together into one array
+        // So i can save both of them as a single value
+        byte[] result = new byte[SaltSize + KeySize];
+        Array.Copy(salt, 0, result, 0, SaltSize);
+        Array.Copy(key, 0, result, SaltSize, KeySize);
 
-        // Number of iterations for PBKDF2 (higher = more secure but slower)
-        private const int Iterations = 100000;
+        // Turn the raw bytes into text so it fits into a normal db column
+        return Convert.ToBase64String(result);
+    }
 
-        // Hash algorithm used internally
-        private static readonly HashAlgorithmName Algorithm = HashAlgorithmName.SHA256;
-
-        // Create hashed password from plain password
-        public static string HashPassword(string password)
+    public bool Verify(string password, string hash)
+    {
+        // The stored hash is text so turn it back into bytes
+        byte[] stored;
+        try
         {
-            // Generate random salt (important for security)
-            byte[] salt = RandomNumberGenerator.GetBytes(SaltSize);
-
-            // Create hash using PBKDF2 algorithm
-            byte[] hash = Rfc2898DeriveBytes.Pbkdf2(
-                password,
-                salt,
-                Iterations,
-                Algorithm,
-                KeySize);
-
-            // Combine salt + hash into one array
-            byte[] hashBytes = new byte[SaltSize + KeySize];
-
-            // Copy salt to beginning of array
-            Array.Copy(salt, 0, hashBytes, 0, SaltSize);
-
-            // Copy hash after salt
-            Array.Copy(hash, 0, hashBytes, SaltSize, KeySize);
-
-            // Convert to Base64 so we can store in database as string
-            return Convert.ToBase64String(hashBytes);
+            stored = Convert.FromBase64String(hash);
+        }
+        catch (FormatException)
+        {
+            // If it is broken or not real base64 then just fail
+            return false;
         }
 
-        // Check if entered password matches stored hashed password
-        public static bool VerifyPassword(string password, string hashedPassword)
+        // If the length is wrong then it is not one of our hashes so it can not match
+        if (stored.Length != SaltSize + KeySize)
         {
-            // Convert stored Base64 string back to byte array
-            byte[] hashBytes = Convert.FromBase64String(hashedPassword);
-
-            // Extract salt from stored data
-            byte[] salt = new byte[SaltSize];
-            Array.Copy(hashBytes, 0, salt, 0, SaltSize);
-
-            // Recalculate hash using same salt and parameters
-            byte[] hash = Rfc2898DeriveBytes.Pbkdf2(
-                password,
-                salt,
-                Iterations,
-                Algorithm,
-                KeySize);
-
-            // Compare computed hash with stored hash byte by byte
-            for (int i = 0; i < KeySize; i++)
-            {
-                if (hashBytes[i + SaltSize] != hash[i])
-                {
-                    // If any byte is different, password is wrong
-                    return false;
-                }
-            }
-
-            // If all bytes match, password is correct
-            return true;
+            return false;
         }
+
+        // Split it back apart
+        // The first 16 bytes are the salt and the rest is the original key
+        byte[] salt = stored[..SaltSize];
+        byte[] storedKey = stored[SaltSize..];
+        // Hash the typed password with the SAME salt so the compare is fair
+        byte[] computedKey = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, Algorithm, KeySize);
+
+        // Constant time compare so an attacker can not guess the password by timing our answer
+        return CryptographicOperations.FixedTimeEquals(storedKey, computedKey);
     }
 }

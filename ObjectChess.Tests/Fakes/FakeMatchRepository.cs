@@ -1,59 +1,67 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using ObjectChess.Business.Interfaces;
 using ObjectChess.Business.Models;
 
-namespace ObjectChess.Tests.Fakes
+namespace ObjectChess.Tests.Fakes;
+
+public class FakeMatchRepository : IMatchRepository
 {
-    public class FakeMatchRepository : IMatchRepository
+    private readonly List<MatchModel> _matches = [];
+    private int _nextId = 1;
+
+    public int GetTotalMatchCount(int userId)
     {
-        private readonly List<MatchModel> _matches = new List<MatchModel>();
+        return _matches.Count(match => match.UserId == userId);
+    }
 
-        public int GetTotalMatchCount(string currentUserEmail)
+    public List<MatchModel> GetPagedMatches(int userId, int page, int pageSize)
+    {
+        return _matches
+            .Where(match => match.UserId == userId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+    }
+
+    public MatchModel? GetMatch(int gameId, int userId)
+    {
+        return _matches.FirstOrDefault(match => match.GameId == gameId && match.UserId == userId);
+    }
+
+    public void AddMatch(MatchModel match)
+    {
+        if (match.GameId == 0)
         {
-            return _matches.Count(m => m.WhitePlayer == currentUserEmail || m.BlackPlayer == currentUserEmail);
+            match.GameId = _nextId++;
         }
 
-        public List<MatchModel> GetPagedMatches(string currentUserEmail, int offset, int pageSize)
+        _matches.Add(match);
+    }
+
+    public void UpdateMatch(MatchModel match)
+    {
+        MatchModel? existing = _matches
+            .FirstOrDefault(m => m.GameId == match.GameId && m.UserId == match.UserId);
+
+        if (existing is null)
         {
-            return _matches
-                .Where(m => m.WhitePlayer == currentUserEmail || m.BlackPlayer == currentUserEmail)
-                .Skip(offset)
-                .Take(pageSize)
-                .ToList();
+            throw new InvalidOperationException("Match not found or not owned by the current user.");
         }
 
-        public void AddMatch(MatchModel match)
-        {
-            _matches.Add(match);
-        }
+        existing.WhitePlayer = match.WhitePlayer;
+        existing.BlackPlayer = match.BlackPlayer;
+        existing.Winner = match.Winner;
+        existing.MatchDate = match.MatchDate;
+        existing.Moves = match.Moves;
+    }
 
-        public void DeleteMatch(int gameId)
-        {
-            MatchModel? match = _matches.FirstOrDefault(m => m.GameID == gameId);
-            if (match != null)
-            {
-                _matches.Remove(match);
-            }
-        }
+    public void DeleteMatch(int gameId, int userId)
+    {
+        MatchModel? match = _matches
+            .FirstOrDefault(m => m.GameId == gameId && m.UserId == userId);
 
-        public List<MatchModel> GetAllMatches()
+        if (match is not null)
         {
-            return _matches;
-        }
-
-        public void AddMatch(string whitePlayer, string blackPlayer, string winner, DateTime matchDate)
-        {
-            MatchModel match = new MatchModel
-            {
-                WhitePlayer = whitePlayer,
-                BlackPlayer = blackPlayer,
-                Winner = winner,
-                MatchDate = matchDate,
-                Moves = new List<MoveModel>()
-            };
-            _matches.Add(match);
+            _matches.Remove(match);
         }
     }
 }
