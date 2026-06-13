@@ -87,6 +87,48 @@ public class MatchServiceTests
     }
 
     [Fact]
+    public void GetPagedMatches_ShouldGiveEachMatchItsOwnMoves()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        service.AddMatch(BuildMatch(UserId, white: "A1", black: "B1"), "e4", "A1");
+        service.AddMatch(BuildMatch(UserId, white: "A2", black: "B2"), "d4 d5", "A2");
+
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 1, 10);
+
+        Assert.Single(matches.Single(m => m.WhitePlayer == "A1").Moves);
+        Assert.Equal(2, matches.Single(m => m.WhitePlayer == "A2").Moves.Count);
+    }
+
+    [Fact]
+    public void GetPagedMatches_ShouldTreatPageBelowOneAsFirstPage()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        repository.AddMatch(BuildMatch(UserId));
+        repository.AddMatch(BuildMatch(UserId));
+
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 0, 10);
+
+        Assert.Equal(2, matches.Count);
+    }
+
+    [Fact]
+    public void GetPagedMatches_ShouldFallBackToDefaultSize_WhenPageSizeBelowOne()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        for (int i = 0; i < 3; i++)
+        {
+            repository.AddMatch(BuildMatch(UserId));
+        }
+
+        List<MatchModel> matches = service.GetPagedMatches(UserId, 1, 0);
+
+        Assert.Equal(3, matches.Count);
+    }
+
+    [Fact]
     public void DeleteMatch_ShouldRemoveMatch()
     {
         FakeMatchRepository repository = new();
@@ -215,73 +257,6 @@ public class MatchServiceTests
     }
 
     [Fact]
-    public void UpdateMatch_ShouldReplaceMoves()
-    {
-        FakeMatchRepository repository = new();
-        MatchService service = CreateService(repository);
-        MatchModel match = BuildMatch(UserId);
-        service.AddMatch(match, "e4 e5", "Alice");
-        int gameId = service.GetPagedMatches(UserId, 1, 10).Single().GameId;
-
-        MatchModel edit = new()
-        {
-            GameId = gameId,
-            UserId = UserId,
-            WhitePlayer = "Alice",
-            BlackPlayer = "Bob",
-            Winner = "Alice",
-            MatchDate = DateTime.Now
-        };
-        service.UpdateMatch(edit, "d4 d5", "Alice");
-
-        MatchModel stored = service.GetMatch(gameId, UserId)!;
-        Assert.Equal(2, stored.Moves.Count);
-        Assert.Equal("d4", stored.Moves[0].MoveText);
-    }
-
-    [Fact]
-    public void GetPagedMatches_ShouldGiveEachMatchItsOwnMoves()
-    {
-        FakeMatchRepository repository = new();
-        MatchService service = CreateService(repository);
-        service.AddMatch(BuildMatch(UserId, white: "A1", black: "B1"), "e4", "A1");
-        service.AddMatch(BuildMatch(UserId, white: "A2", black: "B2"), "d4 d5", "A2");
-
-        List<MatchModel> matches = service.GetPagedMatches(UserId, 1, 10);
-
-        Assert.Single(matches.Single(m => m.WhitePlayer == "A1").Moves);
-        Assert.Equal(2, matches.Single(m => m.WhitePlayer == "A2").Moves.Count);
-    }
-
-    [Fact]
-    public void GetPagedMatches_ShouldTreatPageBelowOneAsFirstPage()
-    {
-        FakeMatchRepository repository = new();
-        MatchService service = CreateService(repository);
-        repository.AddMatch(BuildMatch(UserId));
-        repository.AddMatch(BuildMatch(UserId));
-
-        List<MatchModel> matches = service.GetPagedMatches(UserId, 0, 10);
-
-        Assert.Equal(2, matches.Count);
-    }
-
-    [Fact]
-    public void GetPagedMatches_ShouldFallBackToDefaultSize_WhenPageSizeBelowOne()
-    {
-        FakeMatchRepository repository = new();
-        MatchService service = CreateService(repository);
-        for (int i = 0; i < 3; i++)
-        {
-            repository.AddMatch(BuildMatch(UserId));
-        }
-
-        List<MatchModel> matches = service.GetPagedMatches(UserId, 1, 0);
-
-        Assert.Equal(3, matches.Count);
-    }
-
-    [Fact]
     public void AddMatch_ShouldTrimWhitespaceAroundNames()
     {
         FakeMatchRepository repository = new();
@@ -392,6 +367,31 @@ public class MatchServiceTests
         service.AddMatch(match, string.Empty, "Alice");
 
         Assert.Equal("Alice", service.GetPagedMatches(UserId, 1, 10).Single().BlackPlayer);
+    }
+
+    [Fact]
+    public void UpdateMatch_ShouldReplaceMoves()
+    {
+        FakeMatchRepository repository = new();
+        MatchService service = CreateService(repository);
+        MatchModel match = BuildMatch(UserId);
+        service.AddMatch(match, "e4 e5", "Alice");
+        int gameId = service.GetPagedMatches(UserId, 1, 10).Single().GameId;
+
+        MatchModel edit = new()
+        {
+            GameId = gameId,
+            UserId = UserId,
+            WhitePlayer = "Alice",
+            BlackPlayer = "Bob",
+            Winner = "Alice",
+            MatchDate = DateTime.Now
+        };
+        service.UpdateMatch(edit, "d4 d5", "Alice");
+
+        MatchModel stored = service.GetMatch(gameId, UserId)!;
+        Assert.Equal(2, stored.Moves.Count);
+        Assert.Equal("d4", stored.Moves[0].MoveText);
     }
 
     [Fact]
