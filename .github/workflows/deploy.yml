@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-test-deploy:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,20 +29,18 @@ jobs:
         run: dotnet publish ObjectChess.Web/ObjectChess.csproj -c Release -o ./publish
 
       # Write the production connection string from a GitHub secret so it ships
-      # with the deploy and never lives in the repo.
+      # with the deploy and never lives in the repo. jq escapes it safely.
       - name: Create production appsettings
-        shell: pwsh
         run: |
-          $config = @{ ConnectionStrings = @{ DefaultConnection = $env:CONN } } | ConvertTo-Json
-          $config | Out-File -FilePath ./publish/appsettings.Production.json -Encoding utf8
+          jq -n --arg conn "$CONN" '{ConnectionStrings: {DefaultConnection: $conn}}' > ./publish/appsettings.Production.json
         env:
           CONN: ${{ secrets.MONSTERASP_CONNECTION_STRING }}
 
-      - name: Deploy to MonsterASP (Web Deploy)
-        uses: rasmusbuchholdt/simply-web-deploy@2.1.0
+      - name: Deploy to MonsterASP (FTP)
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          website-name: ${{ secrets.MONSTERASP_SITE_NAME }}
-          server-computer-name: ${{ secrets.MONSTERASP_SERVER }}
-          server-username: ${{ secrets.MONSTERASP_USERNAME }}
-          server-password: ${{ secrets.MONSTERASP_PASSWORD }}
-          source-path: ./publish
+          server: ${{ secrets.MONSTERASP_FTP_SERVER }}
+          username: ${{ secrets.MONSTERASP_FTP_USERNAME }}
+          password: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
+          local-dir: ./publish/
+          server-dir: /wwwroot/
