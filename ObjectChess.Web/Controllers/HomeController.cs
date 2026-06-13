@@ -8,15 +8,8 @@ namespace ObjectChess.Web.Controllers;
 [Authorize] 
 public class HomeController : Controller
 {
-    public IActionResult Index()
-    {
-        return View();
-    }
-
-    public IActionResult Privacy()
-    {
-        return View();
-    }
+    // This controller only serves the error page now.
+    // The exception handler in Program.cs points to /Home/Error so it has to stay.
 
     [AllowAnonymous] 
     [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
