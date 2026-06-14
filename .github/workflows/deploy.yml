@@ -56,5 +56,6 @@ jobs:
           server: ${{ secrets.MONSTERASP_FTP_SERVER }}
           username: ${{ secrets.MONSTERASP_FTP_USERNAME }}
           password: ${{ secrets.MONSTERASP_FTP_PASSWORD }}
+          protocol: ftps
           local-dir: ./publish/
           server-dir: /wwwroot/
