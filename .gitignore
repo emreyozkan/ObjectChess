@@ -483,3 +483,7 @@ $RECYCLE.BIN/
 
 # Claude local settings
 .claude/
+
+# Code coverage output
+coverage/
+coveragereport/

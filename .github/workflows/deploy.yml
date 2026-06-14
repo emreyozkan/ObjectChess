@@ -22,8 +22,22 @@ jobs:
           dotnet restore ObjectChess.Web/ObjectChess.csproj
           dotnet restore ObjectChess.Tests/ObjectChess.Tests.csproj
 
-      - name: Test
-        run: dotnet test ObjectChess.Tests/ObjectChess.Tests.csproj -c Release
+      - name: Test with coverage
+        run: |
+          dotnet test ObjectChess.Tests/ObjectChess.Tests.csproj -c Release --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      - name: Coverage report
+        run: |
+          dotnet tool install -g dotnet-reportgenerator-globaltool
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          reportgenerator -reports:"coverage/**/coverage.cobertura.xml" -targetdir:coveragereport -reporttypes:"Html;MarkdownSummaryGithub"
+          cat coveragereport/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coveragereport
 
       - name: Publish
         run: dotnet publish ObjectChess.Web/ObjectChess.csproj -c Release -o ./publish
