@@ -4,7 +4,7 @@ ObjectChess is a web application for recording and managing chess matches. A use
 
 Live site: https://objectchess.runasp.net
 
-## Tech stack
+## Technology Stack
 
 - C# and ASP.NET Core MVC (.NET 10)
 - MySQL database, accessed with raw ADO.NET (MySql.Data)
